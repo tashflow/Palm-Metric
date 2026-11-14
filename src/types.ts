@@ -90,6 +90,13 @@ export interface Order {
   updatedAtMs?: number;
 }
 
+export interface TrackedOrderMeta {
+  id: string;
+  orderNumber: string;
+  whatsappUrl?: string;
+  receiptSnapshot?: Order;
+}
+
 export interface GeoLocation {
   lat: number;
   lng: number;

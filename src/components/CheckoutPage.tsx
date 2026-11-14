@@ -22,10 +22,12 @@ import { COPY } from '../data/i18n';
 import { useGeolocation } from '../hooks/useGeolocation';
 import { auth, signInAsGuest } from '../lib/firebase';
 import { createOrder } from '../lib/firestoreSync';
+import { unlockOrderAlarmAudio } from '../lib/readyAlarm';
 import type {
   CartItem,
   GeoLocation,
   Language,
+  Order,
   OrderType,
   StoreSettings,
   UserAccount,
@@ -46,7 +48,12 @@ interface CheckoutPageProps {
   onBackToMenu: () => void;
   onOpenAccount: () => void;
   onUpdateSavedLocation?: (loc: GeoLocation) => void;
-  onOrderPlaced: (orderId: string, orderNumber: string, whatsappUrl: string) => void;
+  onOrderPlaced: (
+    orderId: string,
+    orderNumber: string,
+    whatsappUrl: string,
+    receiptOrder: Order,
+  ) => void;
 }
 
 function parseCoordsFromLink(url: string): GeoLocation | undefined {
@@ -255,6 +262,7 @@ export function CheckoutPage({
       return;
     }
 
+    void unlockOrderAlarmAudio();
     setSubmitting(true);
     try {
       if (!auth.currentUser) {
@@ -286,12 +294,17 @@ export function CheckoutPage({
         };
       });
 
+      const deliveryAddressToSend =
+        orderType === 'delivery' ? effectiveLocation || undefined : undefined;
+      const mapsLinkToSend =
+        orderType === 'delivery' ? cleanMapsLink || undefined : undefined;
+
       const orderPayload = {
         orderType,
         customerName: effectiveName,
         customerPhone: effectivePhone,
-        deliveryLocation: effectiveLocation || undefined,
-        mapsLink: cleanMapsLink || undefined,
+        deliveryLocation: deliveryAddressToSend,
+        mapsLink: mapsLinkToSend,
         orderNote: notes.trim() || undefined,
         items: orderItems,
         total: subtotal,
@@ -332,11 +345,28 @@ export function CheckoutPage({
         total: subtotal,
         customerName: effectiveName,
         customerPhone: effectivePhone,
-        deliveryLocation: effectiveLocation || undefined,
-        mapsLink: cleanMapsLink || undefined,
+        deliveryLocation: deliveryAddressToSend,
+        mapsLink: mapsLinkToSend,
         orderNote: notes.trim() || undefined,
         whatsappNumber: storeSettings?.whatsappNumber,
       });
+
+      const nowMs = Date.now();
+      const receiptOrder: Order = {
+        id: created.id,
+        orderNumber: created.orderNumber,
+        orderType,
+        customerName: effectiveName,
+        customerPhone: effectivePhone,
+        deliveryLocation: deliveryAddressToSend,
+        mapsLink: mapsLinkToSend,
+        orderNote: notes.trim() || undefined,
+        items: orderItems,
+        total: subtotal,
+        status: 'Pending',
+        createdAtMs: nowMs,
+        updatedAtMs: nowMs,
+      };
 
       // Trigger WhatsApp deep link using an anchor element (avoids window.open)
       const anchor = document.createElement('a');
@@ -348,7 +378,7 @@ export function CheckoutPage({
       document.body.removeChild(anchor);
 
       onClearCart();
-      onOrderPlaced(created.id, created.orderNumber, whatsappUrl);
+      onOrderPlaced(created.id, created.orderNumber, whatsappUrl, receiptOrder);
     } catch (err) {
       const msg =
         err instanceof Error && !err.message.startsWith('{')
@@ -553,16 +583,22 @@ export function CheckoutPage({
                       {currentUser.phone}
                     </span>
                   </p>
-                  <p>
-                    <span className="font-bold">{t.deliveryLocationLabel}:</span>{' '}
-                    {deliveryLocation || currentUser.address}
-                  </p>
+                  {orderType === 'delivery' && (
+                    <p>
+                      <span className="font-bold">{t.deliveryLocationLabel}:</span>{' '}
+                      {deliveryLocation || currentUser.address}
+                    </p>
+                  )}
                 </div>
               </div>
             ) : (
               <div className="space-y-3.5">
                 <h2 className="text-base font-extrabold text-[#1A3C2F]">
-                  {t.customerDetailsTitle}
+                  {orderType === 'pickup'
+                    ? lang === 'ar'
+                      ? 'بيانات العميل'
+                      : 'Customer Details'
+                    : t.customerDetailsTitle}
                 </h2>
 
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -598,96 +634,100 @@ export function CheckoutPage({
                   </div>
                 </div>
 
-                <div>
-                  <label htmlFor="chk-location" className="block text-xs font-bold text-[#3B594B]">
-                    {t.deliveryLocationLabel}
-                  </label>
-                  <input
-                    id="chk-location"
-                    type="text"
-                    maxLength={300}
-                    value={deliveryLocation}
-                    onChange={(e) => setDeliveryLocation(e.target.value)}
-                    placeholder={t.deliveryLocationPlaceholder}
-                    className="mt-1.5 h-12 w-full rounded-xl border border-[#1A3C2F]/20 bg-white px-3.5 text-sm font-medium text-[#1A3C2F] focus:border-[#C9A227] focus:outline-none"
-                  />
-                </div>
+                {orderType === 'delivery' && (
+                  <div>
+                    <label htmlFor="chk-location" className="block text-xs font-bold text-[#3B594B]">
+                      {t.deliveryLocationLabel}
+                    </label>
+                    <input
+                      id="chk-location"
+                      type="text"
+                      maxLength={300}
+                      value={deliveryLocation}
+                      onChange={(e) => setDeliveryLocation(e.target.value)}
+                      placeholder={t.deliveryLocationPlaceholder}
+                      className="mt-1.5 h-12 w-full rounded-xl border border-[#1A3C2F]/20 bg-white px-3.5 text-sm font-medium text-[#1A3C2F] focus:border-[#C9A227] focus:outline-none"
+                    />
+                  </div>
+                )}
               </div>
             )}
 
-            {/* Geolocation Button + Interactive Google Map + Manual Maps Link */}
-            <div className="space-y-3 pt-1">
-              <button
-                type="button"
-                onClick={() => void handleFetchCurrentLocation()}
-                disabled={locating}
-                aria-busy={locating}
-                className="palm-btn-forest flex w-full min-h-[48px] items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold cursor-pointer disabled:opacity-75 disabled:cursor-wait"
-              >
-                {locating ? (
-                  <Loader2 className="h-4 w-4 animate-spin text-[#C9A227]" />
-                ) : (
-                  <Navigation className="h-4 w-4 text-[#C9A227]" />
-                )}
-                <span>{locating ? t.locatingBtn : t.getCurrentLocationBtn}</span>
-              </button>
-
-              {geoErrorMessage && (
-                <p
-                  role="alert"
-                  className="rounded-xl border border-[#C9A227]/50 bg-[#FFF8E1] px-3.5 py-2.5 text-xs font-bold text-[#7A5B06] leading-relaxed"
+            {/* Geolocation Button + Interactive Google Map + Manual Maps Link (Delivery only) */}
+            {orderType === 'delivery' && (
+              <div className="space-y-3 pt-1">
+                <button
+                  type="button"
+                  onClick={() => void handleFetchCurrentLocation()}
+                  disabled={locating}
+                  aria-busy={locating}
+                  className="palm-btn-forest flex w-full min-h-[48px] items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold cursor-pointer disabled:opacity-75 disabled:cursor-wait"
                 >
-                  {geoErrorMessage}
-                </p>
-              )}
+                  {locating ? (
+                    <Loader2 className="h-4 w-4 animate-spin text-[#C9A227]" />
+                  ) : (
+                    <Navigation className="h-4 w-4 text-[#C9A227]" />
+                  )}
+                  <span>{locating ? t.locatingBtn : t.getCurrentLocationBtn}</span>
+                </button>
 
-              <DeliveryMapPicker
-                lang={lang}
-                location={pinnedLocation}
-                onLocationChange={handleMapLocationChange}
-                showGpsButton={false}
-              />
-
-              <div>
-                <label htmlFor="chk-maps-url" className="block text-xs font-bold text-[#3B594B]">
-                  {t.manualMapsLabel}
-                </label>
-                <input
-                  id="chk-maps-url"
-                  type="url"
-                  dir="ltr"
-                  maxLength={500}
-                  value={manualMapsLink}
-                  onChange={(e) => {
-                    const nextVal = e.target.value;
-                    setManualMapsLink(nextVal);
-                    const parsed = parseCoordsFromLink(nextVal);
-                    if (parsed) setPinnedLocation(parsed);
-                  }}
-                  placeholder={t.manualMapsPlaceholder}
-                  className="mt-1.5 h-11 w-full rounded-xl border border-[#1A3C2F]/20 bg-white px-3.5 font-en text-xs sm:text-sm text-[#1A3C2F] focus:border-[#C9A227] focus:outline-none"
-                />
-              </div>
-
-              {cleanMapsLink && (
-                <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[#DCE8DE] px-3.5 py-2.5 text-xs font-bold text-[#1A3C2F]">
-                  <div className="flex items-center gap-1.5">
-                    <CheckCircle2 className="h-4 w-4 text-[#1E6B38]" />
-                    <span>{t.locationCaptured}</span>
-                  </div>
-                  <a
-                    href={cleanMapsLink}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-[#1A3C2F] underline"
+                {geoErrorMessage && (
+                  <p
+                    role="alert"
+                    className="rounded-xl border border-[#C9A227]/50 bg-[#FFF8E1] px-3.5 py-2.5 text-xs font-bold text-[#7A5B06] leading-relaxed"
                   >
-                    <MapPin className="h-3.5 w-3.5" />
-                    <span>{t.openMapPreview}</span>
-                    <ExternalLink className="h-3 w-3" />
-                  </a>
+                    {geoErrorMessage}
+                  </p>
+                )}
+
+                <DeliveryMapPicker
+                  lang={lang}
+                  location={pinnedLocation}
+                  onLocationChange={handleMapLocationChange}
+                  showGpsButton={false}
+                />
+
+                <div>
+                  <label htmlFor="chk-maps-url" className="block text-xs font-bold text-[#3B594B]">
+                    {t.manualMapsLabel}
+                  </label>
+                  <input
+                    id="chk-maps-url"
+                    type="url"
+                    dir="ltr"
+                    maxLength={500}
+                    value={manualMapsLink}
+                    onChange={(e) => {
+                      const nextVal = e.target.value;
+                      setManualMapsLink(nextVal);
+                      const parsed = parseCoordsFromLink(nextVal);
+                      if (parsed) setPinnedLocation(parsed);
+                    }}
+                    placeholder={t.manualMapsPlaceholder}
+                    className="mt-1.5 h-11 w-full rounded-xl border border-[#1A3C2F]/20 bg-white px-3.5 font-en text-xs sm:text-sm text-[#1A3C2F] focus:border-[#C9A227] focus:outline-none"
+                  />
                 </div>
-              )}
-            </div>
+
+                {cleanMapsLink && (
+                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[#DCE8DE] px-3.5 py-2.5 text-xs font-bold text-[#1A3C2F]">
+                    <div className="flex items-center gap-1.5">
+                      <CheckCircle2 className="h-4 w-4 text-[#1E6B38]" />
+                      <span>{t.locationCaptured}</span>
+                    </div>
+                    <a
+                      href={cleanMapsLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-[#1A3C2F] underline"
+                    >
+                      <MapPin className="h-3.5 w-3.5" />
+                      <span>{t.openMapPreview}</span>
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  </div>
+                )}
+              </div>
+            )}
 
             <div>
               <label htmlFor="chk-notes" className="block text-xs font-bold text-[#3B594B]">

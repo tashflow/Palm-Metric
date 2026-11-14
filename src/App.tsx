@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
-import { Check } from 'lucide-react';
+import { BellOff, BellRing, Check } from 'lucide-react';
 import { AccountPage } from './components/AccountPage';
 import { CheckoutPage } from './components/CheckoutPage';
 import { FloatingCartBar } from './components/FloatingCartBar';
@@ -16,17 +16,25 @@ import {
   seedPalmMetricMenuForAdmin,
   subscribeBillboards,
   subscribeMenu,
+  subscribeOrder,
   subscribeStoreSettings,
 } from './lib/firestoreSync';
+import {
+  startOrderReadyAlarm,
+  stopOrderReadyAlarm,
+  unlockOrderAlarmAudio,
+} from './lib/readyAlarm';
 import type {
   Billboard,
   CartItem,
   GeoLocation,
   Language,
   MenuItem,
+  Order,
   PageView,
   StoreSettings,
   TempChoice,
+  TrackedOrderMeta,
   UserAccount,
 } from './types';
 
@@ -40,12 +48,6 @@ const ADMIN_EMAILS = new Set([
   'palmmatric1@gmail.com',
   'tashfilartwork@gmail.com',
 ]);
-
-interface TrackedOrderMeta {
-  id: string;
-  orderNumber: string;
-  whatsappUrl?: string;
-}
 
 export default function App() {
   const [lang, setLang] = useState<Language>(() => {
@@ -118,6 +120,9 @@ export default function App() {
       return null;
     }
   });
+  const [activeLiveOrder, setActiveLiveOrder] = useState<Order | null>(null);
+  const [stoppedAlarmOrderIds, setStoppedAlarmOrderIds] = useState<string[]>([]);
+  const [justPlacedOrderId, setJustPlacedOrderId] = useState<string | null>(null);
 
   const currentUser = useMemo(
     () => accounts.find((acc) => acc.id === currentUserId) ?? null,
@@ -136,6 +141,59 @@ export default function App() {
     window.addEventListener('gmp-quota-exceeded', handleQuotaExceeded);
     return () => window.removeEventListener('gmp-quota-exceeded', handleQuotaExceeded);
   }, []);
+
+  useEffect(() => {
+    const handleUnlock = () => {
+      void unlockOrderAlarmAudio();
+    };
+    window.addEventListener('pointerdown', handleUnlock, { passive: true });
+    window.addEventListener('keydown', handleUnlock, { passive: true });
+    return () => {
+      window.removeEventListener('pointerdown', handleUnlock);
+      window.removeEventListener('keydown', handleUnlock);
+      stopOrderReadyAlarm();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!activeOrderId || !currentFirebaseUser) {
+      setActiveLiveOrder(null);
+      return;
+    }
+    const unsub = subscribeOrder(
+      activeOrderId,
+      (liveOrder) => {
+        setActiveLiveOrder(liveOrder);
+      },
+      () => {
+        // tracker handles lookup error display
+      },
+    );
+    return () => unsub();
+  }, [activeOrderId, currentFirebaseUser]);
+
+  const isAlarmRinging = Boolean(
+    activeLiveOrder &&
+      activeLiveOrder.status === 'Ready' &&
+      !stoppedAlarmOrderIds.includes(activeLiveOrder.id),
+  );
+
+  useEffect(() => {
+    if (isAlarmRinging) {
+      startOrderReadyAlarm();
+    } else {
+      stopOrderReadyAlarm();
+    }
+  }, [isAlarmRinging]);
+
+  const handleStopAlarm = () => {
+    stopOrderReadyAlarm();
+    if (activeLiveOrder?.id) {
+      setStoppedAlarmOrderIds((prev) =>
+        prev.includes(activeLiveOrder.id) ? prev : [...prev, activeLiveOrder.id],
+      );
+    }
+  };
 
   useEffect(() => {
     const unsubBillboards = subscribeBillboards(
@@ -287,12 +345,18 @@ export default function App() {
     setCart((prev) => prev.map((c) => (c.cartKey === cartKey ? { ...c, note } : c)));
   };
 
-  const handleOrderPlaced = (orderId: string, orderNumber: string, whatsappUrl: string) => {
+  const handleOrderPlaced = (
+    orderId: string,
+    orderNumber: string,
+    whatsappUrl: string,
+    receiptOrder: Order,
+  ) => {
     setTrackedOrders((prev) => {
       const filtered = prev.filter((o) => o.id !== orderId);
-      return [{ id: orderId, orderNumber, whatsappUrl }, ...filtered].slice(0, 10);
+      return [{ id: orderId, orderNumber, whatsappUrl, receiptSnapshot: receiptOrder }, ...filtered].slice(0, 10);
     });
     setActiveOrderId(orderId);
+    setJustPlacedOrderId(orderId);
     navigate('track');
   };
 
@@ -470,6 +534,49 @@ export default function App() {
           hasActiveOrder={Boolean(activeOrderId)}
         />
 
+        {isAlarmRinging && view !== 'track' && activeLiveOrder && (
+          <div
+            role="alert"
+            className="bg-[#C9A227] text-[#142A20] px-4 py-2.5 shadow-md"
+          >
+            <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => navigate('track')}
+                className="flex items-center gap-2 text-xs sm:text-sm font-extrabold cursor-pointer"
+              >
+                <BellRing className="h-4 w-4 animate-bounce" />
+                <span>
+                  {activeLiveOrder.orderType === 'pickup'
+                    ? lang === 'ar'
+                      ? `طلبك (${activeLiveOrder.orderNumber}) جاهز للاستلام الآن!`
+                      : `Order ${activeLiveOrder.orderNumber} is ready for pickup!`
+                    : lang === 'ar'
+                      ? `طلبك (${activeLiveOrder.orderNumber}) جاهز للتوصيل!`
+                      : `Order ${activeLiveOrder.orderNumber} is ready for delivery!`}
+                </span>
+              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => navigate('track')}
+                  className="rounded-lg bg-[#1A3C2F] px-3 py-1.5 text-xs font-extrabold text-[#F5F0E6] cursor-pointer"
+                >
+                  {lang === 'ar' ? 'تتبع الطلب' : 'Track Order'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleStopAlarm}
+                  className="inline-flex items-center gap-1 rounded-lg bg-[#142A20] px-3 py-1.5 text-xs font-extrabold text-[#C9A227] cursor-pointer"
+                >
+                  <BellOff className="h-3.5 w-3.5" />
+                  <span>{lang === 'ar' ? 'إيقاف التنبيه' : 'Stop Alarm'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
       <main className="flex-1">
         {view === 'menu' && (
           <MenuPage
@@ -522,6 +629,13 @@ export default function App() {
             onSignInGoogle={handleGoogleSignIn}
             recentOrders={trackedOrders}
             activeOrderId={activeOrderId}
+            activeLiveOrder={activeLiveOrder}
+            isAlarmRinging={isAlarmRinging}
+            alarmStoppedForOrder={Boolean(
+              activeLiveOrder && stoppedAlarmOrderIds.includes(activeLiveOrder.id),
+            )}
+            onStopAlarm={handleStopAlarm}
+            justPlacedOrderId={justPlacedOrderId}
             onSelectOrderId={(id) => {
               setActiveOrderId(id);
               setTrackedOrders((prev) => {

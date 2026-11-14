@@ -1,0 +1,6 @@
+{
+  "name": "Verdant — Specialty Coffee & Kitchen",
+  "description": "Minimalist mobile-first ordering app for Verdant specialty coffee, ceremonial matcha, and artisanal bakery items with real-time order tracking.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

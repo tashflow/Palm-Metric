@@ -1,0 +1,708 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>بالم مترك | Palm Metric</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800&family=Noto+Sans+Arabic:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    body {
+      background-color: #1A3C2F;
+      color: #F5F0E6;
+      font-family: "Noto Sans Arabic", "Montserrat", sans-serif;
+    }
+    [dir="ltr"] body {
+      font-family: "Montserrat", "Noto Sans Arabic", sans-serif;
+    }
+    .font-en { font-family: "Montserrat", sans-serif; }
+    .font-ar { font-family: "Noto Sans Arabic", sans-serif; }
+    .tabular-nums { font-variant-numeric: tabular-nums; }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    @keyframes mascotFloat {
+      0%, 100% { transform: translateY(0px) rotate(-1.5deg) scale(1); }
+      50% { transform: translateY(-10px) rotate(2deg) scale(1.02); }
+    }
+    .animate-mascot {
+      animation: mascotFloat 4.2s ease-in-out infinite;
+      will-change: transform;
+    }
+    .palm-card {
+      background: linear-gradient(180deg, #FAF6EE 0%, #F5F0E6 100%);
+      color: #1A3C2F;
+      border: 1.5px solid #E8DFCC;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.75), 0 7px 0 #CDBE9F, 0 18px 32px -10px rgba(5, 16, 12, 0.55);
+    }
+    .palm-btn-gold {
+      background: linear-gradient(180deg, #D5B038 0%, #C9A227 100%);
+      color: #142A20;
+      box-shadow: inset 0 1px 0 rgba(255,248,220,0.45), 0 4px 0 #947210;
+      transition: transform 120ms ease, box-shadow 120ms ease;
+    }
+    .palm-btn-gold:active {
+      transform: translateY(2px);
+      box-shadow: 0 2px 0 #947210;
+    }
+    .palm-btn-forest {
+      background: linear-gradient(180deg, #214B3B 0%, #1A3C2F 100%);
+      color: #F5F0E6;
+      box-shadow: 0 4px 0 #0D2119;
+    }
+    .palm-cart-bar {
+      background: linear-gradient(180deg, #D8B43C 0%, #C9A227 100%);
+      color: #142A20;
+      box-shadow: 0 6px 0 #947210, 0 22px 40px -6px rgba(4, 14, 10, 0.68);
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+  <div id="app" class="min-h-screen flex flex-col"></div>
+
+  <script>
+    (function () {
+      const BUSINESS = {
+        nameAr: 'بالم مترك',
+        nameEn: 'Palm Metric',
+        phoneDisplay: '+966 50 643 9172',
+        whatsappNumber: '966506439172',
+        email: 'palmmatric1@gmail.com',
+        mapsUrl: 'https://maps.app.goo.gl/NUSopb1BnQJYNyKd8',
+        instagramUrl: 'https://www.instagram.com/palm_metric',
+        tiktokUrl: 'https://www.tiktok.com/@palm_metric',
+        snapchatUrl: 'https://www.snapchat.com/add/palm_metric',
+        logoSrc: '/assets/aistudio/IMG-20261021-WA0006_53f18f59.jpg',
+        mascotSrc: '/assets/aistudio/file_00000000feb482109f398277360d668c_b4ac5f5f.png'
+      };
+
+      const CATEGORIES = [
+        { id: 'coffee-of-the-day', ar: 'قهوة اليوم', en: 'Coffee of the Day' },
+        { id: 'v60', ar: 'V60', en: 'V60' },
+        { id: 'espresso', ar: 'إسبريسو', en: 'Espresso' },
+        { id: 'matcha', ar: 'ماتشا', en: 'Matcha' },
+        { id: 'specialty', ar: 'مشروبات مختصة', en: 'Specialty' },
+        { id: 'cold-drinks', ar: 'مشروبات باردة', en: 'Cold Drinks' },
+        { id: 'food', ar: 'المخبوزات والحلويات', en: 'Food' }
+      ];
+
+      const MENU = [
+        { id: 'cotd-small', cat: 'coffee-of-the-day', ar: 'قهوة اليوم – صغير', en: 'Coffee of the Day – Small', price: 6 },
+        { id: 'cotd-large', cat: 'coffee-of-the-day', ar: 'قهوة اليوم – كبير', en: 'Coffee of the Day – Large', price: 8 },
+        { id: 'v60-ethiopia', cat: 'v60', ar: 'إثيوبيا (حار / بارد)', en: 'Ethiopia Hot / Cold', price: 12, temp: true },
+        { id: 'v60-colombia', cat: 'v60', ar: 'كولومبيا (حار / بارد)', en: 'Colombia Hot / Cold', price: 12, temp: true },
+        { id: 'v60-yemen', cat: 'v60', ar: 'اليمن (حار / بارد)', en: 'Yemen Hot / Cold', price: 15, temp: true },
+        { id: 'esp-flat-white', cat: 'espresso', ar: 'فلات وايت', en: 'Flat White', price: 14 },
+        { id: 'esp-cappuccino', cat: 'espresso', ar: 'كابتشينو', en: 'Cappuccino', price: 14 },
+        { id: 'mat-palm-regular', cat: 'matcha', ar: 'بالم ماتشا (حليب عادي)', en: 'Palm Matcha (Regular milk)', price: 19 },
+        { id: 'mat-palm-coconut', cat: 'matcha', ar: 'بالم ماتشا (حليب جوز الهند)', en: 'Palm Matcha (Coconut milk)', price: 19 },
+        { id: 'mat-iced', cat: 'matcha', ar: 'آيس ماتشا', en: 'Iced Matcha', price: 17 },
+        { id: 'spec-spanish-latte', cat: 'specialty', ar: 'آيس سبانش لاتيه', en: 'Iced Spanish Latte', price: 16 },
+        { id: 'spec-white-mocha', cat: 'specialty', ar: 'آيس وايت موكا', en: 'Iced White Mocha', price: 17 },
+        { id: 'cold-hibiscus-small', cat: 'cold-drinks', ar: 'كركديه صغير', en: 'Hibiscus Small', price: 8 },
+        { id: 'cold-hibiscus-large', cat: 'cold-drinks', ar: 'كركديه كبير', en: 'Hibiscus Large', price: 10 },
+        { id: 'cold-peach-tea', cat: 'cold-drinks', ar: 'آيس تي خوخ', en: 'Iced Tea Peach', price: 10 },
+        { id: 'food-palm-muffin', cat: 'food', ar: 'بالم مافن', en: 'Palm Muffin', price: 9 },
+        { id: 'food-cookies', cat: 'food', ar: 'كوكيز', en: 'Cookies', price: 10 },
+        { id: 'food-golden-crown', cat: 'food', ar: 'جولدن كراون', en: 'Golden Crown', price: 18 },
+        { id: 'food-pudding', cat: 'food', ar: 'بودينغ', en: 'Pudding', price: 16 },
+        { id: 'food-croissant', cat: 'food', ar: 'كرواسون', en: 'Croissant', price: 6 }
+      ];
+
+      const T = {
+        ar: {
+          brand: 'بالم مترك',
+          tagline: 'قهوة مختصة، ماتشا أصلية، ومخبوزات طازجة تُحضّر لحظة بلحظة',
+          menu: 'القائمة',
+          info: 'عن الفرع',
+          login: 'دخول',
+          langBtn: 'EN',
+          greeting: 'أهلاً بك في بالم مترك',
+          prep: 'التحضير خلال ١٠–١٥ دقيقة',
+          visitBtn: 'موقع الفرع والتواصل',
+          all: 'الكل',
+          add: 'إضافة',
+          hot: 'حار',
+          cold: 'بارد',
+          viewCart: 'عرض السلة وإتمام الطلب',
+          back: 'العودة للقائمة',
+          checkout: 'مراجعة وإتمام الطلب',
+          estTitle: 'الوقت المتوقع للتحضير',
+          estVal: '١٠–١٥ دقيقة',
+          orderType: 'طريقة استلام الطلب',
+          pickup: 'استلام (Pickup)',
+          delivery: 'توصيل (Delivery)',
+          items: 'المنتجات المختارة',
+          emptyTitle: 'سلتك فارغة حالياً',
+          emptyDesc: 'أضف مشروبك المفضل أو المخبوزات من القائمة للبدء.',
+          browse: 'تصفح القائمة',
+          pickupTitle: 'تأكيد الاستلام من الفرع',
+          pickupDesc: 'سيتم تحضير طلبك فور إرساله عبر واتساب خلال ١٠–١٥ دقيقة.',
+          savedDel: 'بيانات التوصيل المحفوظة في حسابك',
+          guestDel: 'بيانات التوصيل',
+          name: 'الاسم الكامل',
+          phone: 'رقم الجوال',
+          address: 'عنوان التوصيل',
+          notes: 'ملاحظات إضافية (اختياري)',
+          shareLoc: 'مشاركة موقعي على الخريطة',
+          locating: 'جاري تحديد موقعك...',
+          locSaved: 'تم حفظ إحداثيات موقعك',
+          locDenied: 'تعذر الوصول للموقع. يرجى السماح بصلاحية الموقع.',
+          subtotal: 'المجموع الفرعي',
+          total: 'الإجمالي',
+          cod: 'الدفع عند الاستلام (Cash on delivery)',
+          noPay: 'لا يوجد دفع إلكتروني — يتم تأكيد الطلب مباشرة عبر واتساب',
+          sendWa: 'إرسال الطلب عبر واتساب',
+          errName: 'يرجى كتابة الاسم الكامل.',
+          errPhone: 'يرجى إدخال رقم الجوال.',
+          errAddr: 'يرجى كتابة عنوان التوصيل.',
+          loginTab: 'تسجيل الدخول',
+          regTab: 'حساب جديد',
+          pass: 'كلمة المرور',
+          signIn: 'دخول إلى حسابي',
+          createAcc: 'إنشاء الحساب وحفظ العنوان',
+          errCreds: 'رقم الجوال أو كلمة المرور غير صحيحة.',
+          errExists: 'رقم الجوال مسجل مسبقاً.',
+          errAll: 'يرجى تعبئة جميع الحقول المطلوبة.',
+          welcome: 'مرحباً بك',
+          logout: 'تسجيل الخروج',
+          infoTitle: 'معلومات فرع بالم مترك',
+          openMaps: 'فتح الموقع في خرائط جوجل',
+          contact: 'التواصل المباشر',
+          social: 'تابعنا على منصات التواصل',
+          footer: 'بالم مترك · Palm Metric — الطلب عبر واتساب بدون دفع إلكتروني'
+        },
+        en: {
+          brand: 'Palm Metric',
+          tagline: 'Specialty coffee, ceremonial matcha & fresh bakes made to order',
+          menu: 'Menu',
+          info: 'Info',
+          login: 'Login',
+          langBtn: 'عربي',
+          greeting: 'Welcome to Palm Metric',
+          prep: 'Ready in 10–15 min',
+          visitBtn: 'Location & Info',
+          all: 'All',
+          add: 'Add',
+          hot: 'Hot',
+          cold: 'Cold',
+          viewCart: 'View Cart & Checkout',
+          back: 'Back to Menu',
+          checkout: 'Checkout',
+          estTitle: 'Estimated preparation time',
+          estVal: '10–15 min',
+          orderType: 'Order Type',
+          pickup: 'Pickup (استلام)',
+          delivery: 'Delivery (توصيل)',
+          items: 'Your Items',
+          emptyTitle: 'Your cart is empty',
+          emptyDesc: 'Add your favorite coffee or pastry from the menu to get started.',
+          browse: 'Browse Menu',
+          pickupTitle: 'Pickup Confirmation',
+          pickupDesc: 'Your order will be prepared fresh as soon as you send it via WhatsApp (10–15 min).',
+          savedDel: 'Saved Delivery Details',
+          guestDel: 'Delivery Details',
+          name: 'Full Name',
+          phone: 'Phone Number',
+          address: 'Delivery Address',
+          notes: 'Notes (Optional)',
+          shareLoc: 'Share my location on the map',
+          locating: 'Getting your location...',
+          locSaved: 'Map coordinates attached',
+          locDenied: 'Location permission denied. Please enable GPS in your browser.',
+          subtotal: 'Subtotal',
+          total: 'Total',
+          cod: 'Cash on delivery',
+          noPay: 'No online payment — orders are sent via WhatsApp only',
+          sendWa: 'Send Order via WhatsApp',
+          errName: 'Please enter your full name.',
+          errPhone: 'Please enter your phone number.',
+          errAddr: 'Please enter your delivery address.',
+          loginTab: 'Login',
+          regTab: 'Create Account',
+          pass: 'Password',
+          signIn: 'Sign In',
+          createAcc: 'Create Account & Save Address',
+          errCreds: 'Invalid phone number or password.',
+          errExists: 'An account with this phone number already exists.',
+          errAll: 'Please fill in Name, Phone, Password, and Delivery Address.',
+          welcome: 'Welcome back',
+          logout: 'Logout',
+          infoTitle: 'Palm Metric Info & Location',
+          openMaps: 'Open in Google Maps',
+          contact: 'Direct Contact',
+          social: 'Follow Us',
+          footer: 'Palm Metric · WhatsApp Ordering · No Online Payment'
+        }
+      };
+
+      const state = {
+        lang: localStorage.getItem('pm_lang') === 'en' ? 'en' : 'ar',
+        view: 'menu',
+        cat: 'all',
+        temps: {},
+        cart: JSON.parse(localStorage.getItem('pm_cart') || '[]'),
+        accounts: JSON.parse(localStorage.getItem('pm_accounts') || '[]'),
+        sessionId: localStorage.getItem('pm_session') || null,
+        orderType: 'pickup',
+        guest: { name: '', phone: '', address: '' },
+        notes: '',
+        loc: null,
+        locError: '',
+        locLoading: false,
+        formError: '',
+        accTab: 'login',
+        accError: ''
+      };
+
+      function getUser() {
+        return state.accounts.find(a => a.id === state.sessionId) || null;
+      }
+
+      function save() {
+        localStorage.setItem('pm_lang', state.lang);
+        localStorage.setItem('pm_cart', JSON.stringify(state.cart));
+        localStorage.setItem('pm_accounts', JSON.stringify(state.accounts));
+        if (state.sessionId) localStorage.setItem('pm_session', state.sessionId);
+        else localStorage.removeItem('pm_session');
+      }
+
+      function esc(str) {
+        return String(str)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;');
+      }
+
+      function buildWaUrl() {
+        const user = getUser();
+        const isAr = state.lang === 'ar';
+        const total = state.cart.reduce((s, i) => s + i.price * i.qty, 0);
+        const lines = ['🌴 *Palm Metric | بالم مترك*', '---------------------------'];
+        lines.push(state.orderType === 'pickup'
+          ? (isAr ? 'نوع الطلب: Pickup (استلام من الفرع)' : 'Order Type: Pickup')
+          : (isAr ? 'نوع الطلب: Delivery (توصيل)' : 'Order Type: Delivery'));
+        lines.push('');
+        lines.push(isAr ? '*الطلبات:*' : '*Items:*');
+        state.cart.forEach(i => {
+          const tempLabel = i.temp ? (i.temp === 'hot' ? ' (Hot / حار)' : ' (Cold / بارد)') : '';
+          lines.push(`• ${i.qty}x ${isAr ? i.ar : i.en}${tempLabel} — ${i.price * i.qty} ﷼`);
+        });
+        lines.push('');
+        lines.push(isAr ? `*الإجمالي: ${total} ﷼*` : `*Total: ${total} ﷼*`);
+        if (state.orderType === 'delivery') {
+          const n = user ? user.name : state.guest.name.trim();
+          const p = user ? user.phone : state.guest.phone.trim();
+          const a = user ? user.address : state.guest.address.trim();
+          const mapLoc = state.loc || (user && user.loc);
+          lines.push('');
+          lines.push(isAr ? '*بيانات التوصيل:*' : '*Delivery Details:*');
+          lines.push(`${isAr ? 'الاسم' : 'Name'}: ${n}`);
+          lines.push(`${isAr ? 'الجوال' : 'Phone'}: ${p}`);
+          lines.push(`${isAr ? 'العنوان' : 'Address'}: ${a}`);
+          if (state.notes.trim()) lines.push(`${isAr ? 'ملاحظات' : 'Notes'}: ${state.notes.trim()}`);
+          if (mapLoc) lines.push(`${isAr ? 'موقع الخريطة' : 'Google Maps'}: https://www.google.com/maps/search/?api=1&query=${mapLoc.lat},${mapLoc.lng}`);
+          lines.push('');
+          lines.push('💵 Cash on delivery / الدفع عند الاستلام');
+        } else if (state.notes.trim()) {
+          lines.push('');
+          lines.push(`${isAr ? 'ملاحظات' : 'Notes'}: ${state.notes.trim()}`);
+        }
+        return `https://wa.me/${BUSINESS.whatsappNumber}?text=${encodeURIComponent(lines.join('\n'))}`;
+      }
+
+      function render() {
+        document.documentElement.lang = state.lang;
+        document.documentElement.dir = state.lang === 'ar' ? 'rtl' : 'ltr';
+        const t = T[state.lang];
+        const user = getUser();
+        const cartCount = state.cart.reduce((s, i) => s + i.qty, 0);
+        const cartTotal = state.cart.reduce((s, i) => s + i.price * i.qty, 0);
+
+        let bodyHtml = '';
+
+        if (state.view === 'menu') {
+          const cats = state.cat === 'all' ? CATEGORIES : CATEGORIES.filter(c => c.id === state.cat);
+          bodyHtml = `
+            <div class="mx-auto max-w-6xl px-4 pt-5 pb-32 sm:px-6">
+              <section class="relative overflow-hidden rounded-3xl border border-[#C9A227]/30 bg-gradient-to-br from-[#143025] via-[#1A3C2F] to-[#112920] px-5 py-7 sm:px-10 sm:py-10 shadow-[0_20px_50px_-14px_rgba(4,14,10,0.65)]">
+                <div class="relative flex flex-col md:flex-row items-center justify-between gap-6 sm:gap-10">
+                  <div class="relative flex items-center justify-center shrink-0 md:order-2">
+                    <div class="pointer-events-none absolute inset-0 scale-110 rounded-full bg-[radial-gradient(circle,rgba(201,162,39,0.24)_0%,rgba(245,240,230,0.06)_42%,rgba(26,60,47,0)_72%)]"></div>
+                    <img src="${BUSINESS.mascotSrc}" alt="Palm Metric Mascot" class="animate-mascot relative h-44 w-44 sm:h-56 sm:w-56 object-contain drop-shadow-[0_18px_26px_rgba(0,0,0,0.48)] select-none" />
+                  </div>
+                  <div class="text-center md:text-start md:order-1 max-w-xl">
+                    <p class="text-xs sm:text-sm font-bold text-[#C9A227]">${t.greeting}</p>
+                    <h1 class="mt-2 text-3xl sm:text-5xl font-extrabold text-[#F5F0E6]">
+                      ${state.lang === 'ar' ? `${BUSINESS.nameAr} · <span class="font-en text-2xl sm:text-3xl">${BUSINESS.nameEn}</span>` : `<span class="font-en">${BUSINESS.nameEn}</span> · <span class="font-ar text-2xl sm:text-3xl">${BUSINESS.nameAr}</span>`}
+                    </h1>
+                    <p class="mt-3 text-sm sm:text-base font-medium text-[#F5F0E6]/85">${t.tagline}</p>
+                    <div class="mt-6 flex flex-wrap items-center justify-center md:justify-start gap-3">
+                      <span class="rounded-2xl border border-[#C9A227]/35 bg-[#132D23]/80 px-4 py-2 text-xs sm:text-sm font-bold text-[#F5F0E6]">${t.prep}</span>
+                      <button data-nav="info" class="palm-btn-gold rounded-2xl px-4 py-2 text-xs sm:text-sm font-extrabold">${t.visitBtn}</button>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <div class="mt-6 flex items-center gap-2.5 overflow-x-auto no-scrollbar pb-2">
+                <button data-cat="all" class="min-h-[44px] rounded-2xl px-4 py-2 text-sm font-bold whitespace-nowrap shrink-0 ${state.cat === 'all' ? 'palm-btn-gold' : 'bg-[#234A3B] text-[#F5F0E6] border border-[#F5F0E6]/15'}">${t.all}</button>
+                ${CATEGORIES.map(c => `<button data-cat="${c.id}" class="min-h-[44px] rounded-2xl px-4 py-2 text-sm font-bold whitespace-nowrap shrink-0 ${state.cat === c.id ? 'palm-btn-gold' : 'bg-[#234A3B] text-[#F5F0E6] border border-[#F5F0E6]/15'}">${state.lang === 'ar' ? c.ar : c.en}</button>`).join('')}
+              </div>
+
+              <div class="mt-6 space-y-8">
+                ${cats.map(cat => {
+                  const items = MENU.filter(m => m.cat === cat.id);
+                  return `
+                    <section>
+                      <div class="mb-4 flex items-baseline justify-between border-b border-[#C9A227]/30 pb-2">
+                        <h2 class="text-xl sm:text-2xl font-extrabold text-[#F5F0E6]">${state.lang === 'ar' ? cat.ar : cat.en}</h2>
+                        <span class="text-xs sm:text-sm font-semibold text-[#C9A227]">${state.lang === 'ar' ? cat.en : cat.ar}</span>
+                      </div>
+                      <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                        ${items.map(item => {
+                          const temp = item.temp ? (state.temps[item.id] || 'hot') : undefined;
+                          const key = temp ? `${item.id}::${temp}` : item.id;
+                          const inCart = state.cart.find(c => c.cartKey === key);
+                          const qty = inCart ? inCart.qty : 0;
+                          return `
+                            <article class="palm-card flex flex-col justify-between rounded-2xl p-4 sm:p-5">
+                              <div>
+                                <div class="flex items-start justify-between gap-3">
+                                  <div>
+                                    <h3 class="text-base sm:text-lg font-extrabold text-[#1A3C2F]">${state.lang === 'ar' ? item.ar : item.en}</h3>
+                                    <p class="mt-0.5 text-xs font-semibold text-[#546E61]">${state.lang === 'ar' ? item.en : item.ar}</p>
+                                  </div>
+                                  <span class="shrink-0 rounded-xl bg-[#1A3C2F] px-3 py-1.5 text-sm font-extrabold text-[#F5F0E6] tabular-nums">${item.price} ﷼</span>
+                                </div>
+                                ${item.temp ? `
+                                  <div class="mt-3.5 flex gap-2">
+                                    <button data-temp="${item.id}:hot" class="flex-1 min-h-[38px] rounded-xl text-xs font-bold ${temp === 'hot' ? 'bg-[#1A3C2F] text-[#C9A227]' : 'bg-[#E6DEC8] text-[#3B594B]'}">${t.hot}</button>
+                                    <button data-temp="${item.id}:cold" class="flex-1 min-h-[38px] rounded-xl text-xs font-bold ${temp === 'cold' ? 'bg-[#1A3C2F] text-[#C9A227]' : 'bg-[#E6DEC8] text-[#3B594B]'}">${t.cold}</button>
+                                  </div>` : ''}
+                              </div>
+                              <div class="mt-4 pt-3 border-t border-[#1A3C2F]/10">
+                                ${qty === 0
+                                  ? `<button data-add="${item.id}" class="palm-btn-gold w-full min-h-[44px] rounded-xl text-sm font-extrabold">+ ${t.add}</button>`
+                                  : `<div class="flex items-center justify-between rounded-xl bg-[#1A3C2F] p-1 text-[#F5F0E6]">
+                                      <button data-qty="${key}:-1" class="h-10 w-11 rounded-lg bg-[#254E3E] font-bold">-</button>
+                                      <span class="font-en text-sm font-extrabold text-[#C9A227] tabular-nums">${qty}</span>
+                                      <button data-qty="${key}:1" class="h-10 w-11 rounded-lg bg-[#C9A227] text-[#142A20] font-extrabold">+</button>
+                                    </div>`}
+                              </div>
+                            </article>`;
+                        }).join('')}
+                      </div>
+                    </section>`;
+                }).join('')}
+              </div>
+            </div>`;
+        } else if (state.view === 'checkout') {
+          const mapLoc = state.loc || (user && user.loc);
+          const mapUrl = mapLoc ? `https://www.google.com/maps/search/?api=1&query=${mapLoc.lat},${mapLoc.lng}` : '';
+          bodyHtml = `
+            <div class="mx-auto max-w-3xl px-4 pt-6 pb-16 sm:px-6 space-y-5">
+              <div class="flex items-center justify-between">
+                <button data-nav="menu" class="min-h-[44px] rounded-xl bg-[#234A3B] px-4 py-2 text-sm font-bold text-[#F5F0E6]">${t.back}</button>
+                <h1 class="text-xl sm:text-2xl font-extrabold text-[#F5F0E6]">${t.checkout}</h1>
+              </div>
+              ${state.cart.length === 0 ? `
+                <div class="palm-card rounded-3xl p-8 text-center">
+                  <h2 class="text-xl font-extrabold text-[#1A3C2F]">${t.emptyTitle}</h2>
+                  <p class="mt-2 text-sm text-[#4A6457]">${t.emptyDesc}</p>
+                  <button data-nav="menu" class="palm-btn-gold mt-6 min-h-[46px] rounded-xl px-6 py-3 text-sm font-extrabold">${t.browse}</button>
+                </div>` : `
+                <div class="palm-card rounded-3xl p-5">
+                  <div class="flex items-center justify-between pb-4 border-b border-[#1A3C2F]/10">
+                    <span class="text-sm font-bold text-[#1A3C2F]">${t.estTitle}</span>
+                    <span class="rounded-xl bg-[#1A3C2F] px-3 py-1.5 text-xs font-extrabold text-[#C9A227]">${t.estVal}</span>
+                  </div>
+                  <p class="mt-4 text-xs font-bold text-[#4A6457] mb-2.5">${t.orderType}</p>
+                  <div class="grid grid-cols-2 gap-3">
+                    <button data-otype="pickup" class="min-h-[50px] rounded-2xl text-sm font-extrabold ${state.orderType === 'pickup' ? 'palm-btn-gold' : 'bg-[#E6DEC8] text-[#2F4D3F]'}">${t.pickup}</button>
+                    <button data-otype="delivery" class="min-h-[50px] rounded-2xl text-sm font-extrabold ${state.orderType === 'delivery' ? 'palm-btn-gold' : 'bg-[#E6DEC8] text-[#2F4D3F]'}">${t.delivery}</button>
+                  </div>
+                </div>
+                <div class="palm-card rounded-3xl p-5">
+                  <h2 class="text-base font-extrabold text-[#1A3C2F] mb-4">${t.items}</h2>
+                  <ul class="divide-y divide-[#1A3C2F]/10">
+                    ${state.cart.map(c => `
+                      <li class="flex items-center justify-between gap-3 py-3">
+                        <div>
+                          <p class="text-sm font-extrabold text-[#1A3C2F]">${state.lang === 'ar' ? c.ar : c.en} ${c.temp ? `(${c.temp === 'hot' ? t.hot : t.cold})` : ''}</p>
+                          <p class="text-xs text-[#546E61]">${c.price} ﷼</p>
+                        </div>
+                        <div class="flex items-center gap-3">
+                          <div class="flex items-center rounded-xl bg-[#1A3C2F] p-1 text-[#F5F0E6]">
+                            <button data-qty="${c.cartKey}:-1" class="h-8 w-8 rounded-lg">-</button>
+                            <span class="w-7 text-center font-en text-xs font-extrabold text-[#C9A227]">${c.qty}</span>
+                            <button data-qty="${c.cartKey}:1" class="h-8 w-8 rounded-lg">+</button>
+                          </div>
+                          <span class="font-en text-sm font-extrabold tabular-nums">${c.price * c.qty} ﷼</span>
+                        </div>
+                      </li>`).join('')}
+                  </ul>
+                </div>
+                <div class="palm-card rounded-3xl p-5 space-y-4">
+                  ${state.orderType === 'pickup' ? `
+                    <div class="rounded-2xl bg-[#EAE2D0] p-4">
+                      <p class="text-sm font-extrabold text-[#1A3C2F]">${t.pickupTitle}</p>
+                      <p class="mt-1 text-xs text-[#3B594B]">${t.pickupDesc}</p>
+                    </div>` : `
+                    ${user ? `
+                      <div class="rounded-2xl bg-[#EAE2D0] p-4 space-y-1 text-sm">
+                        <p class="font-extrabold text-[#1A3C2F]">${t.savedDel}</p>
+                        <p><strong>${t.name}:</strong> ${esc(user.name)}</p>
+                        <p><strong>${t.phone}:</strong> <span dir="ltr">${esc(user.phone)}</span></p>
+                        <p><strong>${t.address}:</strong> ${esc(user.address)}</p>
+                      </div>` : `
+                      <div class="space-y-3">
+                        <h2 class="text-base font-extrabold">${t.guestDel}</h2>
+                        <input id="g-name" value="${esc(state.guest.name)}" placeholder="${t.name}" class="h-12 w-full rounded-xl border border-[#1A3C2F]/20 bg-white px-3.5 text-sm" />
+                        <input id="g-phone" dir="ltr" value="${esc(state.guest.phone)}" placeholder="${t.phone}" class="h-12 w-full rounded-xl border border-[#1A3C2F]/20 bg-white px-3.5 text-sm" />
+                        <input id="g-addr" value="${esc(state.guest.address)}" placeholder="${t.address}" class="h-12 w-full rounded-xl border border-[#1A3C2F]/20 bg-white px-3.5 text-sm" />
+                      </div>`}
+                    <button id="share-loc-btn" class="palm-btn-forest w-full min-h-[48px] rounded-xl text-sm font-bold">${state.locLoading ? t.locating : t.shareLoc}</button>
+                    ${state.locError ? `<p class="text-xs font-bold text-[#B42318]">${state.locError}</p>` : ''}
+                    ${mapUrl ? `<div class="rounded-xl bg-[#DCE8DE] px-3.5 py-2.5 text-xs font-bold text-[#1A3C2F] flex justify-between"><span>${t.locSaved}</span><a href="${mapUrl}" target="_blank" class="underline">Google Maps</a></div>` : ''}
+                  `}
+                  <textarea id="order-notes" rows="2" placeholder="${t.notes}" class="w-full rounded-xl border border-[#1A3C2F]/20 bg-white p-3 text-sm">${esc(state.notes)}</textarea>
+                </div>
+                <div class="palm-card rounded-3xl p-5 space-y-3">
+                  <div class="flex justify-between text-lg font-extrabold"><span>${t.total}</span><span class="font-en">${cartTotal} ﷼</span></div>
+                  ${state.orderType === 'delivery' ? `<div class="rounded-xl bg-[#EAE2D0] px-3.5 py-2 text-xs font-bold">${t.cod}</div>` : ''}
+                  <p class="text-xs text-[#4A6457]">${t.noPay}</p>
+                  ${state.formError ? `<p class="rounded-xl bg-[#FEE4E2] px-3.5 py-2 text-xs font-bold text-[#912018]">${state.formError}</p>` : ''}
+                  <a id="send-wa-link" href="${buildWaUrl()}" target="_blank" rel="noopener noreferrer" class="palm-btn-gold flex w-full min-h-[54px] items-center justify-center rounded-2xl text-base font-extrabold">${t.sendWa}</a>
+                </div>`}
+            </div>`;
+        } else if (state.view === 'account') {
+          bodyHtml = `
+            <div class="mx-auto max-w-xl px-4 pt-6 pb-20 sm:px-6">
+              <button data-nav="menu" class="min-h-[44px] rounded-xl bg-[#234A3B] px-4 py-2 text-sm font-bold text-[#F5F0E6]">${t.back}</button>
+              ${user ? `
+                <div class="palm-card mt-6 rounded-3xl p-6 space-y-4">
+                  <h1 class="text-2xl font-extrabold">${t.welcome}: ${esc(user.name)}</h1>
+                  <div class="rounded-2xl bg-[#EAE2D0] p-4 space-y-2 text-sm">
+                    <p><strong>${t.phone}:</strong> <span dir="ltr">${esc(user.phone)}</span></p>
+                    <p><strong>${t.address}:</strong> ${esc(user.address)}</p>
+                  </div>
+                  <button id="logout-btn" class="w-full min-h-[46px] rounded-xl bg-[#FEE4E2] text-sm font-extrabold text-[#912018]">${t.logout}</button>
+                </div>` : `
+                <div class="palm-card mt-6 rounded-3xl p-6">
+                  <div class="grid grid-cols-2 gap-2 rounded-2xl bg-[#E6DEC8] p-1.5">
+                    <button data-acctab="login" class="min-h-[44px] rounded-xl text-sm font-extrabold ${state.accTab === 'login' ? 'bg-[#1A3C2F] text-[#F5F0E6]' : ''}">${t.loginTab}</button>
+                    <button data-acctab="register" class="min-h-[44px] rounded-xl text-sm font-extrabold ${state.accTab === 'register' ? 'bg-[#1A3C2F] text-[#F5F0E6]' : ''}">${t.regTab}</button>
+                  </div>
+                  ${state.accTab === 'login' ? `
+                    <form id="login-form" class="mt-5 space-y-3">
+                      <input id="l-phone" dir="ltr" placeholder="${t.phone}" class="h-12 w-full rounded-xl border border-[#1A3C2F]/20 bg-white px-3.5 text-sm" />
+                      <input id="l-pass" type="password" placeholder="${t.pass}" class="h-12 w-full rounded-xl border border-[#1A3C2F]/20 bg-white px-3.5 text-sm" />
+                      ${state.accError ? `<p class="text-xs font-bold text-[#912018]">${state.accError}</p>` : ''}
+                      <button type="submit" class="palm-btn-gold w-full min-h-[48px] rounded-xl text-sm font-extrabold">${t.signIn}</button>
+                    </form>` : `
+                    <form id="reg-form" class="mt-5 space-y-3">
+                      <input id="r-name" placeholder="${t.name}" class="h-12 w-full rounded-xl border border-[#1A3C2F]/20 bg-white px-3.5 text-sm" />
+                      <input id="r-phone" dir="ltr" placeholder="${t.phone}" class="h-12 w-full rounded-xl border border-[#1A3C2F]/20 bg-white px-3.5 text-sm" />
+                      <input id="r-pass" type="password" placeholder="${t.pass}" class="h-12 w-full rounded-xl border border-[#1A3C2F]/20 bg-white px-3.5 text-sm" />
+                      <input id="r-addr" placeholder="${t.address}" class="h-12 w-full rounded-xl border border-[#1A3C2F]/20 bg-white px-3.5 text-sm" />
+                      ${state.accError ? `<p class="text-xs font-bold text-[#912018]">${state.accError}</p>` : ''}
+                      <button type="submit" class="palm-btn-gold w-full min-h-[48px] rounded-xl text-sm font-extrabold">${t.createAcc}</button>
+                    </form>`}
+                </div>`}
+            </div>`;
+        } else {
+          bodyHtml = `
+            <div class="mx-auto max-w-3xl px-4 pt-6 pb-20 sm:px-6 space-y-5">
+              <div class="flex items-center justify-between">
+                <button data-nav="menu" class="min-h-[44px] rounded-xl bg-[#234A3B] px-4 py-2 text-sm font-bold text-[#F5F0E6]">${t.back}</button>
+                <h1 class="text-xl font-extrabold text-[#F5F0E6]">${t.infoTitle}</h1>
+              </div>
+              <div class="palm-card rounded-3xl p-5 space-y-3">
+                <a href="${BUSINESS.mapsUrl}" target="_blank" class="palm-btn-gold flex w-full min-h-[48px] items-center justify-center rounded-xl text-sm font-extrabold">${t.openMaps}</a>
+                <a href="tel:+${BUSINESS.whatsappNumber}" class="block rounded-xl bg-[#EAE2D0] p-3.5 text-sm font-bold" dir="ltr">${BUSINESS.phoneDisplay}</a>
+                <a href="https://wa.me/${BUSINESS.whatsappNumber}" target="_blank" class="block rounded-xl bg-[#EAE2D0] p-3.5 text-sm font-bold" dir="ltr">WhatsApp: ${BUSINESS.phoneDisplay}</a>
+                <a href="mailto:${BUSINESS.email}" class="block rounded-xl bg-[#EAE2D0] p-3.5 text-sm font-bold" dir="ltr">${BUSINESS.email}</a>
+              </div>
+              <div class="palm-card rounded-3xl p-5 grid grid-cols-3 gap-3 text-center">
+                <a href="${BUSINESS.instagramUrl}" target="_blank" class="palm-btn-forest py-3 rounded-xl text-xs font-bold">Instagram</a>
+                <a href="${BUSINESS.tiktokUrl}" target="_blank" class="palm-btn-forest py-3 rounded-xl text-xs font-bold">TikTok</a>
+                <a href="${BUSINESS.snapchatUrl}" target="_blank" class="palm-btn-forest py-3 rounded-xl text-xs font-bold">Snapchat</a>
+              </div>
+            </div>`;
+        }
+
+        document.getElementById('app').innerHTML = `
+          <header class="sticky top-0 z-30 h-16 bg-[#132D23]/95 backdrop-blur-md border-b border-[#C9A227]/25">
+            <div class="mx-auto flex h-full max-w-6xl items-center justify-between px-4 sm:px-6">
+              <button data-nav="menu" class="flex items-center gap-2.5">
+                <img src="${BUSINESS.logoSrc}" alt="Palm Metric" class="h-10 w-10 rounded-xl bg-[#F5F0E6] object-cover p-0.5" />
+                <span class="text-base sm:text-lg font-extrabold text-[#F5F0E6]">${t.brand}</span>
+              </button>
+              <div class="flex items-center gap-2">
+                <button data-nav="info" class="min-h-[40px] rounded-xl border border-[#F5F0E6]/20 px-3 text-xs font-bold text-[#F5F0E6]">${t.info}</button>
+                <button id="lang-btn" class="min-h-[40px] rounded-xl border border-[#C9A227]/40 px-3 text-xs font-bold text-[#C9A227]">${t.langBtn}</button>
+                <button data-nav="account" class="min-h-[40px] rounded-xl px-3.5 text-xs font-bold ${user ? 'bg-[#F5F0E6] text-[#1A3C2F]' : 'palm-btn-gold'}">${user ? esc(user.name.split(' ')[0]) : t.login}</button>
+              </div>
+            </div>
+          </header>
+          <main class="flex-1">${bodyHtml}</main>
+          ${state.view === 'menu' && cartCount > 0 ? `
+            <div class="fixed bottom-4 inset-x-4 z-40 mx-auto max-w-xl">
+              <button data-nav="checkout" class="palm-cart-bar flex w-full min-h-[58px] items-center justify-between rounded-2xl px-4 py-3 font-extrabold">
+                <span class="rounded-xl bg-[#1A3C2F] px-3 py-1 text-sm text-[#C9A227]">${cartCount}</span>
+                <span class="text-sm sm:text-base">${t.viewCart}</span>
+                <span class="font-en text-base sm:text-lg">${cartTotal} ﷼</span>
+              </button>
+            </div>` : ''}
+          <footer class="border-t border-[#C9A227]/20 bg-[#132D23] py-5 px-4 text-center text-xs text-[#F5F0E6]/70">${t.footer}</footer>
+        `;
+
+        bindEvents();
+      }
+
+      function bindEvents() {
+        document.querySelectorAll('[data-nav]').forEach(el => {
+          el.addEventListener('click', () => {
+            state.view = el.getAttribute('data-nav');
+            state.formError = '';
+            state.accError = '';
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            render();
+          });
+        });
+
+        const langBtn = document.getElementById('lang-btn');
+        if (langBtn) langBtn.addEventListener('click', () => {
+          state.lang = state.lang === 'ar' ? 'en' : 'ar';
+          save();
+          render();
+        });
+
+        document.querySelectorAll('[data-cat]').forEach(el => {
+          el.addEventListener('click', () => {
+            state.cat = el.getAttribute('data-cat');
+            render();
+          });
+        });
+
+        document.querySelectorAll('[data-temp]').forEach(el => {
+          el.addEventListener('click', () => {
+            const [id, temp] = el.getAttribute('data-temp').split(':');
+            state.temps[id] = temp;
+            render();
+          });
+        });
+
+        document.querySelectorAll('[data-add]').forEach(el => {
+          el.addEventListener('click', () => {
+            const id = el.getAttribute('data-add');
+            const item = MENU.find(m => m.id === id);
+            if (!item) return;
+            const temp = item.temp ? (state.temps[item.id] || 'hot') : undefined;
+            const key = temp ? `${item.id}::${temp}` : item.id;
+            const existing = state.cart.find(c => c.cartKey === key);
+            if (existing) existing.qty += 1;
+            else state.cart.push({ cartKey: key, id: item.id, ar: item.ar, en: item.en, price: item.price, qty: 1, temp });
+            save();
+            render();
+          });
+        });
+
+        document.querySelectorAll('[data-qty]').forEach(el => {
+          el.addEventListener('click', () => {
+            const parts = el.getAttribute('data-qty').split(':');
+            const delta = Number(parts.pop());
+            const key = parts.join(':');
+            state.cart = state.cart.map(c => c.cartKey === key ? { ...c, qty: c.qty + delta } : c).filter(c => c.qty > 0);
+            save();
+            render();
+          });
+        });
+
+        document.querySelectorAll('[data-otype]').forEach(el => {
+          el.addEventListener('click', () => {
+            state.orderType = el.getAttribute('data-otype');
+            state.formError = '';
+            render();
+          });
+        });
+
+        const gName = document.getElementById('g-name');
+        const gPhone = document.getElementById('g-phone');
+        const gAddr = document.getElementById('g-addr');
+        const oNotes = document.getElementById('order-notes');
+        const syncCheckoutUrl = () => {
+          const wa = document.getElementById('send-wa-link');
+          if (wa) wa.setAttribute('href', buildWaUrl());
+        };
+        if (gName) gName.addEventListener('input', e => { state.guest.name = e.target.value; syncCheckoutUrl(); });
+        if (gPhone) gPhone.addEventListener('input', e => { state.guest.phone = e.target.value; syncCheckoutUrl(); });
+        if (gAddr) gAddr.addEventListener('input', e => { state.guest.address = e.target.value; syncCheckoutUrl(); });
+        if (oNotes) oNotes.addEventListener('input', e => { state.notes = e.target.value; syncCheckoutUrl(); });
+
+        const locBtn = document.getElementById('share-loc-btn');
+        if (locBtn) locBtn.addEventListener('click', () => {
+          if (!navigator.geolocation) { state.locError = T[state.lang].locDenied; render(); return; }
+          state.locLoading = true; state.locError = ''; render();
+          navigator.geolocation.getCurrentPosition(pos => {
+            state.loc = { lat: Number(pos.coords.latitude.toFixed(6)), lng: Number(pos.coords.longitude.toFixed(6)) };
+            state.locLoading = false; render();
+          }, () => {
+            state.locError = T[state.lang].locDenied; state.locLoading = false; render();
+          });
+        });
+
+        const waLink = document.getElementById('send-wa-link');
+        if (waLink) waLink.addEventListener('click', (e) => {
+          const user = getUser();
+          const t = T[state.lang];
+          if (state.orderType === 'delivery') {
+            const n = user ? user.name : state.guest.name.trim();
+            const p = user ? user.phone : state.guest.phone.trim();
+            const a = user ? user.address : state.guest.address.trim();
+            if (!n) { e.preventDefault(); state.formError = t.errName; render(); return; }
+            if (!p) { e.preventDefault(); state.formError = t.errPhone; render(); return; }
+            if (!a) { e.preventDefault(); state.formError = t.errAddr; render(); return; }
+          }
+          waLink.setAttribute('href', buildWaUrl());
+        });
+
+        document.querySelectorAll('[data-acctab]').forEach(el => {
+          el.addEventListener('click', () => { state.accTab = el.getAttribute('data-acctab'); state.accError = ''; render(); });
+        });
+
+        const loginForm = document.getElementById('login-form');
+        if (loginForm) loginForm.addEventListener('submit', e => {
+          e.preventDefault();
+          const p = document.getElementById('l-phone').value.trim();
+          const pw = document.getElementById('l-pass').value.trim();
+          const m = state.accounts.find(a => a.phone.replace(/\s+/g, '') === p.replace(/\s+/g, '') && a.password === pw);
+          if (!m) { state.accError = T[state.lang].errCreds; render(); return; }
+          state.sessionId = m.id; state.view = 'menu'; save(); render();
+        });
+
+        const regForm = document.getElementById('reg-form');
+        if (regForm) regForm.addEventListener('submit', e => {
+          e.preventDefault();
+          const name = document.getElementById('r-name').value.trim();
+          const phone = document.getElementById('r-phone').value.trim();
+          const password = document.getElementById('r-pass').value.trim();
+          const address = document.getElementById('r-addr').value.trim();
+          if (!name || !phone || !password || !address) { state.accError = T[state.lang].errAll; render(); return; }
+          if (state.accounts.some(a => a.phone.replace(/\s+/g, '') === phone.replace(/\s+/g, ''))) { state.accError = T[state.lang].errExists; render(); return; }
+          const acc = { id: 'pm_' + Date.now(), name, phone, password, address };
+          state.accounts.push(acc); state.sessionId = acc.id; state.view = 'menu'; save(); render();
+        });
+
+        const logoutBtn = document.getElementById('logout-btn');
+        if (logoutBtn) logoutBtn.addEventListener('click', () => { state.sessionId = null; save(); render(); });
+      }
+
+      render();
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,414 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global safety net: default deny everything unless explicitly allowed below.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Core primitives
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn()
+        && request.auth.token.email_verified == true
+        && (
+          request.auth.token.email == 'tashfilartwork@gmail.com'
+          || exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+        );
+    }
+
+    // Billboard, Ad & Offer validation blueprint
+    function isValidBillboard(data) {
+      return data.keys().size() >= 1 && data.keys().size() <= 40
+        && data.keys().hasOnly([
+          'title', 'titleAr', 'titleEn', 'name', 'nameAr', 'nameEn', 'headline',
+          'subtitle', 'subtitleAr', 'subtitleEn', 'description', 'descriptionAr',
+          'mediaUrl', 'imageUrl', 'videoUrl', 'posterUrl', 'url', 'image', 'video', 'bannerUrl', 'fileUrl',
+          'mediaType', 'type',
+          'active', 'isActive', 'status',
+          'order', 'sortOrder',
+          'category', 'ctaLabel', 'badge', 'discount', 'discountPercent',
+          'offerPrice', 'originalPrice', 'link', 'itemId', 'itemIds', 'featuredItemIds',
+          'createdAt', 'updatedAt'
+        ])
+        && (!('title' in data) || (data.title is string && data.title.size() <= 200))
+        && (!('titleAr' in data) || (data.titleAr is string && data.titleAr.size() <= 200))
+        && (!('titleEn' in data) || (data.titleEn is string && data.titleEn.size() <= 200))
+        && (!('name' in data) || (data.name is string && data.name.size() <= 200))
+        && (!('nameAr' in data) || (data.nameAr is string && data.nameAr.size() <= 200))
+        && (!('nameEn' in data) || (data.nameEn is string && data.nameEn.size() <= 200))
+        && (!('headline' in data) || (data.headline is string && data.headline.size() <= 200))
+        && (!('subtitle' in data) || (data.subtitle is string && data.subtitle.size() <= 400))
+        && (!('subtitleAr' in data) || (data.subtitleAr is string && data.subtitleAr.size() <= 400))
+        && (!('subtitleEn' in data) || (data.subtitleEn is string && data.subtitleEn.size() <= 400))
+        && (!('description' in data) || (data.description is string && data.description.size() <= 500))
+        && (!('descriptionAr' in data) || (data.descriptionAr is string && data.descriptionAr.size() <= 500))
+        && (!('mediaUrl' in data) || (data.mediaUrl is string && data.mediaUrl.size() <= 700000))
+        && (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() <= 700000))
+        && (!('videoUrl' in data) || (data.videoUrl is string && data.videoUrl.size() <= 700000))
+        && (!('posterUrl' in data) || (data.posterUrl is string && data.posterUrl.size() <= 700000))
+        && (!('url' in data) || (data.url is string && data.url.size() <= 700000))
+        && (!('image' in data) || (data.image is string && data.image.size() <= 700000))
+        && (!('video' in data) || (data.video is string && data.video.size() <= 700000))
+        && (!('bannerUrl' in data) || (data.bannerUrl is string && data.bannerUrl.size() <= 700000))
+        && (!('fileUrl' in data) || (data.fileUrl is string && data.fileUrl.size() <= 700000))
+        && (!('mediaType' in data) || (data.mediaType is string && data.mediaType.size() <= 40))
+        && (!('type' in data) || (data.type is string && data.type.size() <= 40))
+        && (!('active' in data) || data.active is bool)
+        && (!('isActive' in data) || data.isActive is bool)
+        && (!('status' in data) || (data.status is string && data.status.size() <= 40))
+        && (!('order' in data) || data.order is number)
+        && (!('sortOrder' in data) || data.sortOrder is number)
+        && (!('category' in data) || (data.category is string && data.category.size() <= 80))
+        && (!('ctaLabel' in data) || (data.ctaLabel is string && data.ctaLabel.size() <= 60))
+        && (!('badge' in data) || (data.badge is string && data.badge.size() <= 60))
+        && (!('discount' in data) || (data.discount is string && data.discount.size() <= 60))
+        && (!('discountPercent' in data) || data.discountPercent is number)
+        && (!('offerPrice' in data) || data.offerPrice is number)
+        && (!('originalPrice' in data) || data.originalPrice is number)
+        && (!('link' in data) || (data.link is string && data.link.size() <= 500))
+        && (!('itemId' in data) || (data.itemId is string && data.itemId.size() <= 128))
+        && (!('itemIds' in data) || (data.itemIds is list && data.itemIds.size() <= 20 && (data.itemIds.size() == 0 || data.itemIds[0] is string)))
+        && (!('featuredItemIds' in data) || (data.featuredItemIds is list && data.featuredItemIds.size() <= 20 && (data.featuredItemIds.size() == 0 || data.featuredItemIds[0] is string)))
+        && (!('createdAt' in data) || data.createdAt is timestamp)
+        && (!('updatedAt' in data) || data.updatedAt is timestamp);
+    }
+
+    // Menu & Offer item validation blueprint
+    function isValidMenuItem(data) {
+      return data.keys().size() >= 2 && data.keys().size() <= 45
+        && data.keys().hasOnly([
+          'name', 'nameAr', 'nameEn', 'title', 'titleAr', 'titleEn',
+          'description', 'descriptionAr', 'descriptionEn',
+          'price', 'originalPrice', 'discountPrice', 'offerPrice',
+          'isOffer', 'offerLabel', 'offerLabelAr', 'badge',
+          'category', 'categoryId', 'categoryAr', 'categoryEn', 'categoryName',
+          'imageUrl', 'photoUrl', 'image', 'imgUrl', 'url', 'photo', 'thumbnail', 'picture', 'mediaUrl', 'image_url', 'photo_url', 'storagePath', 'imagePath',
+          'inStock', 'isAvailable', 'available', 'outOfStock', 'stockStatus', 'status',
+          'prepTime', 'supportsTemp', 'hasTempOption',
+          'order', 'sortOrder', 'featured',
+          'createdAt', 'updatedAt'
+        ])
+        && (!('name' in data) || (data.name is string && data.name.size() <= 140))
+        && (!('nameAr' in data) || (data.nameAr is string && data.nameAr.size() <= 140))
+        && (!('nameEn' in data) || (data.nameEn is string && data.nameEn.size() <= 140))
+        && (!('title' in data) || (data.title is string && data.title.size() <= 140))
+        && (!('titleAr' in data) || (data.titleAr is string && data.titleAr.size() <= 140))
+        && (!('titleEn' in data) || (data.titleEn is string && data.titleEn.size() <= 140))
+        && (!('description' in data) || (data.description is string && data.description.size() <= 500))
+        && (!('descriptionAr' in data) || (data.descriptionAr is string && data.descriptionAr.size() <= 500))
+        && (!('descriptionEn' in data) || (data.descriptionEn is string && data.descriptionEn.size() <= 500))
+        && (!('price' in data) || (data.price is number && data.price >= 0 && data.price <= 10000))
+        && (!('originalPrice' in data) || (data.originalPrice is number && data.originalPrice >= 0 && data.originalPrice <= 10000))
+        && (!('discountPrice' in data) || (data.discountPrice is number && data.discountPrice >= 0 && data.discountPrice <= 10000))
+        && (!('offerPrice' in data) || (data.offerPrice is number && data.offerPrice >= 0 && data.offerPrice <= 10000))
+        && (!('isOffer' in data) || data.isOffer is bool)
+        && (!('offerLabel' in data) || (data.offerLabel is string && data.offerLabel.size() <= 60))
+        && (!('offerLabelAr' in data) || (data.offerLabelAr is string && data.offerLabelAr.size() <= 60))
+        && (!('badge' in data) || (data.badge is string && data.badge.size() <= 60))
+        && (!('category' in data) || (data.category is string && data.category.size() <= 80))
+        && (!('categoryId' in data) || (data.categoryId is string && data.categoryId.size() <= 80))
+        && (!('categoryAr' in data) || (data.categoryAr is string && data.categoryAr.size() <= 80))
+        && (!('categoryEn' in data) || (data.categoryEn is string && data.categoryEn.size() <= 80))
+        && (!('categoryName' in data) || (data.categoryName is string && data.categoryName.size() <= 80))
+        && (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() <= 700000))
+        && (!('photoUrl' in data) || (data.photoUrl is string && data.photoUrl.size() <= 700000))
+        && (!('image' in data) || (data.image is string && data.image.size() <= 700000))
+        && (!('imgUrl' in data) || (data.imgUrl is string && data.imgUrl.size() <= 700000))
+        && (!('url' in data) || (data.url is string && data.url.size() <= 700000))
+        && (!('photo' in data) || (data.photo is string && data.photo.size() <= 700000))
+        && (!('thumbnail' in data) || (data.thumbnail is string && data.thumbnail.size() <= 700000))
+        && (!('picture' in data) || (data.picture is string && data.picture.size() <= 700000))
+        && (!('mediaUrl' in data) || (data.mediaUrl is string && data.mediaUrl.size() <= 700000))
+        && (!('image_url' in data) || (data.image_url is string && data.image_url.size() <= 700000))
+        && (!('photo_url' in data) || (data.photo_url is string && data.photo_url.size() <= 700000))
+        && (!('storagePath' in data) || (data.storagePath is string && data.storagePath.size() <= 512))
+        && (!('imagePath' in data) || (data.imagePath is string && data.imagePath.size() <= 512))
+        && (!('inStock' in data) || data.inStock is bool)
+        && (!('isAvailable' in data) || data.isAvailable is bool)
+        && (!('available' in data) || data.available is bool)
+        && (!('outOfStock' in data) || data.outOfStock is bool)
+        && (!('stockStatus' in data) || (data.stockStatus is string && data.stockStatus.size() <= 40))
+        && (!('status' in data) || (data.status is string && data.status.size() <= 40))
+        && (!('prepTime' in data) || (data.prepTime is string && data.prepTime.size() <= 40))
+        && (!('supportsTemp' in data) || data.supportsTemp is bool)
+        && (!('hasTempOption' in data) || data.hasTempOption is bool)
+        && (!('order' in data) || data.order is number)
+        && (!('sortOrder' in data) || data.sortOrder is number)
+        && (!('featured' in data) || data.featured is bool)
+        && (!('createdAt' in data) || data.createdAt is timestamp)
+        && (!('updatedAt' in data) || data.updatedAt is timestamp);
+    }
+
+    function isValidCategory(data) {
+      return data.keys().size() >= 1 && data.keys().size() <= 12
+        && data.keys().hasOnly(['name', 'nameAr', 'nameEn', 'order', 'sortOrder', 'active', 'isActive', 'createdAt', 'updatedAt'])
+        && (!('name' in data) || (data.name is string && data.name.size() <= 80))
+        && (!('nameAr' in data) || (data.nameAr is string && data.nameAr.size() <= 80))
+        && (!('nameEn' in data) || (data.nameEn is string && data.nameEn.size() <= 80))
+        && (!('order' in data) || data.order is number)
+        && (!('sortOrder' in data) || data.sortOrder is number)
+        && (!('active' in data) || data.active is bool)
+        && (!('isActive' in data) || data.isActive is bool)
+        && (!('createdAt' in data) || data.createdAt is timestamp)
+        && (!('updatedAt' in data) || data.updatedAt is timestamp);
+    }
+
+    function isValidStoreSettings(data) {
+      return data.keys().size() >= 1 && data.keys().size() <= 20
+        && data.keys().hasOnly([
+          'storeOpen', 'isOpen', 'prepTime', 'whatsappNumber',
+          'announcement', 'announcementAr', 'heroTitle', 'heroTitleAr',
+          'heroSubtitle', 'heroSubtitleAr', 'updatedAt', 'createdAt'
+        ])
+        && (!('storeOpen' in data) || data.storeOpen is bool)
+        && (!('isOpen' in data) || data.isOpen is bool)
+        && (!('prepTime' in data) || (data.prepTime is string && data.prepTime.size() <= 40))
+        && (!('whatsappNumber' in data) || (data.whatsappNumber is string && data.whatsappNumber.size() <= 30))
+        && (!('announcement' in data) || (data.announcement is string && data.announcement.size() <= 300))
+        && (!('announcementAr' in data) || (data.announcementAr is string && data.announcementAr.size() <= 300))
+        && (!('heroTitle' in data) || (data.heroTitle is string && data.heroTitle.size() <= 140))
+        && (!('heroTitleAr' in data) || (data.heroTitleAr is string && data.heroTitleAr.size() <= 140))
+        && (!('heroSubtitle' in data) || (data.heroSubtitle is string && data.heroSubtitle.size() <= 300))
+        && (!('heroSubtitleAr' in data) || (data.heroSubtitleAr is string && data.heroSubtitleAr.size() <= 300))
+        && (!('createdAt' in data) || data.createdAt is timestamp)
+        && (!('updatedAt' in data) || data.updatedAt is timestamp);
+    }
+
+    // Order validation blueprints
+    function isValidOrderCreate(data) {
+      return data.keys().hasAll(['orderNumber', 'customerName', 'customerPhone', 'items', 'total', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['orderNumber', 'orderType', 'customerName', 'customerPhone', 'deliveryLocation', 'mapsLink', 'orderNote', 'items', 'itemCount', 'total', 'status', 'sourceApp', 'lang', 'createdAt', 'updatedAt'])
+        && data.orderNumber is string && data.orderNumber.size() >= 3 && data.orderNumber.size() <= 24 && data.orderNumber.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.customerName is string && data.customerName.size() >= 1 && data.customerName.size() <= 100
+        && data.customerPhone is string && data.customerPhone.size() >= 4 && data.customerPhone.size() <= 40
+        && (!('orderType' in data) || data.orderType in ['pickup', 'delivery'])
+        && (!('deliveryLocation' in data) || (data.deliveryLocation is string && data.deliveryLocation.size() <= 300))
+        && (!('mapsLink' in data) || (data.mapsLink is string && data.mapsLink.size() <= 500))
+        && (!('orderNote' in data) || (data.orderNote is string && data.orderNote.size() <= 400))
+        && (!('itemCount' in data) || (data.itemCount is number && data.itemCount >= 1 && data.itemCount <= 500))
+        && (!('sourceApp' in data) || (data.sourceApp is string && data.sourceApp.size() <= 60))
+        && (!('lang' in data) || (data.lang is string && data.lang.size() <= 10))
+        && data.items is list && data.items.size() >= 1 && data.items.size() <= 50
+        && data.items[0] is map
+        && data.total is number && data.total >= 0 && data.total <= 50000
+        && data.status == 'Pending'
+        && data.createdAt == request.time
+        && data.updatedAt == request.time;
+    }
+
+    function isValidOrderUpdate(data) {
+      return data.keys().hasAll(['orderNumber', 'customerName', 'customerPhone', 'items', 'total', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['orderNumber', 'orderType', 'customerName', 'customerPhone', 'deliveryLocation', 'mapsLink', 'orderNote', 'items', 'itemCount', 'total', 'status', 'sourceApp', 'lang', 'createdAt', 'updatedAt'])
+        && data.orderNumber == existing().orderNumber
+        && data.customerName == existing().customerName
+        && data.customerPhone == existing().customerPhone
+        && data.items == existing().items
+        && data.total == existing().total
+        && data.createdAt == existing().createdAt
+        && data.status in ['Pending', 'Preparing', 'Ready', 'Completed', 'Cancelled']
+        && data.updatedAt == request.time;
+    }
+
+    function isValidReportCreate(data) {
+      return data.keys().hasAll(['type', 'title', 'status', 'createdAt'])
+        && data.keys().hasOnly([
+          'type', 'title', 'message', 'orderId', 'orderNumber', 'orderType',
+          'customerName', 'customerPhone', 'deliveryLocation', 'mapsLink',
+          'itemCount', 'total', 'status', 'sourceApp', 'createdAt'
+        ])
+        && data.type in ['order', 'feedback', 'customer_signup', 'issue']
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 160
+        && data.status == 'New'
+        && data.createdAt == request.time
+        && (!('message' in data) || (data.message is string && data.message.size() <= 1000))
+        && (!('orderId' in data) || (data.orderId is string && data.orderId.size() <= 128))
+        && (!('orderNumber' in data) || (data.orderNumber is string && data.orderNumber.size() <= 40))
+        && (!('orderType' in data) || (data.orderType is string && data.orderType.size() <= 20))
+        && (!('customerName' in data) || (data.customerName is string && data.customerName.size() <= 100))
+        && (!('customerPhone' in data) || (data.customerPhone is string && data.customerPhone.size() <= 40))
+        && (!('deliveryLocation' in data) || (data.deliveryLocation is string && data.deliveryLocation.size() <= 300))
+        && (!('mapsLink' in data) || (data.mapsLink is string && data.mapsLink.size() <= 500))
+        && (!('itemCount' in data) || (data.itemCount is number && data.itemCount >= 0 && data.itemCount <= 500))
+        && (!('total' in data) || (data.total is number && data.total >= 0 && data.total <= 50000))
+        && (!('sourceApp' in data) || (data.sourceApp is string && data.sourceApp.size() <= 60));
+    }
+
+    function isValidReportUpdate(data) {
+      return data.keys().hasAll(['type', 'title', 'status', 'createdAt'])
+        && data.type == existing().type
+        && data.title == existing().title
+        && data.createdAt == existing().createdAt
+        && data.status in ['New', 'Reviewed', 'Resolved'];
+    }
+
+    function isValidCustomerCreate(data) {
+      return data.keys().hasAll(['name', 'phone', 'createdAt'])
+        && data.keys().hasOnly(['name', 'phone', 'address', 'mapsLink', 'sourceApp', 'createdAt'])
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 100
+        && data.phone is string && data.phone.size() >= 4 && data.phone.size() <= 40
+        && data.createdAt == request.time
+        && (!('address' in data) || (data.address is string && data.address.size() <= 300))
+        && (!('mapsLink' in data) || (data.mapsLink is string && data.mapsLink.size() <= 500))
+        && (!('sourceApp' in data) || (data.sourceApp is string && data.sourceApp.size() <= 60));
+    }
+
+    // Publicly readable promotional billboards, offers, banners, promotions, and ads; admin-only writes
+    match /billboards/{billboardId} {
+      allow get: if isValidId(billboardId);
+      allow list: if true;
+      allow create: if isValidId(billboardId) && isAdmin() && isValidBillboard(incoming());
+      allow update: if isValidId(billboardId) && isAdmin() && isValidBillboard(incoming());
+      allow delete: if isValidId(billboardId) && isAdmin();
+    }
+
+    match /offers/{offerId} {
+      allow get: if isValidId(offerId);
+      allow list: if true;
+      allow create: if isValidId(offerId) && isAdmin() && isValidBillboard(incoming());
+      allow update: if isValidId(offerId) && isAdmin() && isValidBillboard(incoming());
+      allow delete: if isValidId(offerId) && isAdmin();
+    }
+
+    match /banners/{bannerId} {
+      allow get: if isValidId(bannerId);
+      allow list: if true;
+      allow create: if isValidId(bannerId) && isAdmin() && isValidBillboard(incoming());
+      allow update: if isValidId(bannerId) && isAdmin() && isValidBillboard(incoming());
+      allow delete: if isValidId(bannerId) && isAdmin();
+    }
+
+    match /promotions/{promoId} {
+      allow get: if isValidId(promoId);
+      allow list: if true;
+      allow create: if isValidId(promoId) && isAdmin() && isValidBillboard(incoming());
+      allow update: if isValidId(promoId) && isAdmin() && isValidBillboard(incoming());
+      allow delete: if isValidId(promoId) && isAdmin();
+    }
+
+    match /ads/{adId} {
+      allow get: if isValidId(adId);
+      allow list: if true;
+      allow create: if isValidId(adId) && isAdmin() && isValidBillboard(incoming());
+      allow update: if isValidId(adId) && isAdmin() && isValidBillboard(incoming());
+      allow delete: if isValidId(adId) && isAdmin();
+    }
+
+    match /advertisements/{adId} {
+      allow get: if isValidId(adId);
+      allow list: if true;
+      allow create: if isValidId(adId) && isAdmin() && isValidBillboard(incoming());
+      allow update: if isValidId(adId) && isAdmin() && isValidBillboard(incoming());
+      allow delete: if isValidId(adId) && isAdmin();
+    }
+
+    // Publicly readable menu collections & categories; admin-only writes
+    match /menu/{itemId} {
+      allow get: if isValidId(itemId);
+      allow list: if true;
+      allow create: if isValidId(itemId) && isAdmin() && isValidMenuItem(incoming());
+      allow update: if isValidId(itemId) && isAdmin() && isValidMenuItem(incoming());
+      allow delete: if isValidId(itemId) && isAdmin();
+    }
+
+    match /menuItems/{itemId} {
+      allow get: if isValidId(itemId);
+      allow list: if true;
+      allow create: if isValidId(itemId) && isAdmin() && isValidMenuItem(incoming());
+      allow update: if isValidId(itemId) && isAdmin() && isValidMenuItem(incoming());
+      allow delete: if isValidId(itemId) && isAdmin();
+    }
+
+    match /products/{productId} {
+      allow get: if isValidId(productId);
+      allow list: if true;
+      allow create: if isValidId(productId) && isAdmin() && isValidMenuItem(incoming());
+      allow update: if isValidId(productId) && isAdmin() && isValidMenuItem(incoming());
+      allow delete: if isValidId(productId) && isAdmin();
+    }
+
+    match /items/{itemId} {
+      allow get: if isValidId(itemId);
+      allow list: if true;
+      allow create: if isValidId(itemId) && isAdmin() && isValidMenuItem(incoming());
+      allow update: if isValidId(itemId) && isAdmin() && isValidMenuItem(incoming());
+      allow delete: if isValidId(itemId) && isAdmin();
+    }
+
+    match /categories/{categoryId} {
+      allow get: if isValidId(categoryId);
+      allow list: if true;
+      allow create: if isValidId(categoryId) && isAdmin() && isValidCategory(incoming());
+      allow update: if isValidId(categoryId) && isAdmin() && isValidCategory(incoming());
+      allow delete: if isValidId(categoryId) && isAdmin();
+    }
+
+    // Storefront settings controlled by Verda Admin
+    match /settings/{settingId} {
+      allow get: if isValidId(settingId);
+      allow list: if true;
+      allow create: if isValidId(settingId) && isAdmin() && isValidStoreSettings(incoming());
+      allow update: if isValidId(settingId) && isAdmin() && isValidStoreSettings(incoming());
+      allow delete: if isValidId(settingId) && isAdmin();
+    }
+
+    match /storeConfig/{configId} {
+      allow get: if isValidId(configId);
+      allow list: if true;
+      allow create: if isValidId(configId) && isAdmin() && isValidStoreSettings(incoming());
+      allow update: if isValidId(configId) && isAdmin() && isValidStoreSettings(incoming());
+      allow delete: if isValidId(configId) && isAdmin();
+    }
+
+    // Orders: Customers can create Pending orders and track their specific order ID via get();
+    // Listing all orders is restricted to Verda Admin to prevent PII scraping.
+    match /orders/{orderId} {
+      allow get: if isValidId(orderId);
+      allow list: if isAdmin();
+      allow create: if isValidId(orderId) && isValidOrderCreate(incoming());
+      allow update: if isValidId(orderId) && isAdmin() && isValidOrderUpdate(incoming())
+        && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']);
+      allow delete: if isValidId(orderId) && isAdmin();
+    }
+
+    // Reports: Customer app sends order, signup, and feedback reports; Verda Admin reads and manages them.
+    match /reports/{reportId} {
+      allow create: if isValidId(reportId) && isValidReportCreate(incoming());
+      allow get: if isValidId(reportId) && isAdmin();
+      allow list: if isAdmin();
+      allow update: if isValidId(reportId) && isAdmin() && isValidReportUpdate(incoming())
+        && incoming().diff(existing()).affectedKeys().hasOnly(['status']);
+      allow delete: if isValidId(reportId) && isAdmin();
+    }
+
+    // Customers: Synced on signup for Verda Admin visibility; read/update/delete restricted to admins.
+    match /customers/{customerId} {
+      allow create: if isValidId(customerId) && isValidCustomerCreate(incoming());
+      allow get: if isValidId(customerId) && isAdmin();
+      allow list: if isAdmin();
+      allow update, delete: if isValidId(customerId) && isAdmin();
+    }
+
+    // Admins collection
+    match /admins/{adminId} {
+      allow get: if isValidId(adminId) && isSignedIn() && request.auth.uid == adminId;
+      allow list, create, update, delete: if false;
+    }
+  }
+}

@@ -1,0 +1,257 @@
+{
+  "entities": {
+    "Billboard": {
+      "title": "Billboard",
+      "description": "Promotional hero billboard, ad, offer banner, or looping video managed by Verda Admin.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "maxLength": 200 },
+        "titleAr": { "type": "string", "maxLength": 200 },
+        "titleEn": { "type": "string", "maxLength": 200 },
+        "name": { "type": "string", "maxLength": 200 },
+        "subtitle": { "type": "string", "maxLength": 400 },
+        "subtitleAr": { "type": "string", "maxLength": 400 },
+        "subtitleEn": { "type": "string", "maxLength": 400 },
+        "description": { "type": "string", "maxLength": 500 },
+        "mediaUrl": { "type": "string", "maxLength": 700000 },
+        "imageUrl": { "type": "string", "maxLength": 700000 },
+        "videoUrl": { "type": "string", "maxLength": 2048 },
+        "url": { "type": "string", "maxLength": 700000 },
+        "mediaType": { "type": "string", "enum": ["image", "video"] },
+        "type": { "type": "string", "maxLength": 40 },
+        "posterUrl": { "type": "string", "maxLength": 700000 },
+        "active": { "type": "boolean" },
+        "isActive": { "type": "boolean" },
+        "status": { "type": "string", "maxLength": 40 },
+        "order": { "type": "number" },
+        "sortOrder": { "type": "number" },
+        "category": { "type": "string", "maxLength": 60 },
+        "ctaLabel": { "type": "string", "maxLength": 60 },
+        "badge": { "type": "string", "maxLength": 60 },
+        "discount": { "type": "string", "maxLength": 60 },
+        "itemId": { "type": "string", "maxLength": 128 },
+        "itemIds": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "MenuItem": {
+      "title": "MenuItem",
+      "description": "Specialty coffee, matcha, offer item, or food item controlled by Verda Admin.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "maxLength": 140 },
+        "nameAr": { "type": "string", "maxLength": 140 },
+        "nameEn": { "type": "string", "maxLength": 140 },
+        "title": { "type": "string", "maxLength": 140 },
+        "description": { "type": "string", "maxLength": 500 },
+        "descriptionAr": { "type": "string", "maxLength": 500 },
+        "price": { "type": "number" },
+        "originalPrice": { "type": "number" },
+        "discountPrice": { "type": "number" },
+        "offerPrice": { "type": "number" },
+        "isOffer": { "type": "boolean" },
+        "offerLabel": { "type": "string", "maxLength": 60 },
+        "category": { "type": "string", "maxLength": 80 },
+        "categoryId": { "type": "string", "maxLength": 80 },
+        "categoryAr": { "type": "string", "maxLength": 80 },
+        "imageUrl": { "type": "string", "maxLength": 700000 },
+        "photoUrl": { "type": "string", "maxLength": 700000 },
+        "image": { "type": "string", "maxLength": 700000 },
+        "photo": { "type": "string", "maxLength": 700000 },
+        "thumbnail": { "type": "string", "maxLength": 700000 },
+        "mediaUrl": { "type": "string", "maxLength": 700000 },
+        "storagePath": { "type": "string", "maxLength": 512 },
+        "imagePath": { "type": "string", "maxLength": 512 },
+        "inStock": { "type": "boolean" },
+        "available": { "type": "boolean" },
+        "isAvailable": { "type": "boolean" },
+        "outOfStock": { "type": "boolean" },
+        "status": { "type": "string", "maxLength": 40 },
+        "prepTime": { "type": "string", "maxLength": 40 },
+        "supportsTemp": { "type": "boolean" },
+        "order": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "Category": {
+      "title": "Category",
+      "description": "Menu category managed by Verda Admin.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "maxLength": 80 },
+        "nameAr": { "type": "string", "maxLength": 80 },
+        "nameEn": { "type": "string", "maxLength": 80 },
+        "order": { "type": "number" },
+        "active": { "type": "boolean" }
+      }
+    },
+    "StoreSettings": {
+      "title": "StoreSettings",
+      "description": "Global storefront controls managed by Verda Admin.",
+      "type": "object",
+      "properties": {
+        "storeOpen": { "type": "boolean" },
+        "isOpen": { "type": "boolean" },
+        "prepTime": { "type": "string", "maxLength": 40 },
+        "whatsappNumber": { "type": "string", "maxLength": 30 },
+        "announcement": { "type": "string", "maxLength": 300 },
+        "announcementAr": { "type": "string", "maxLength": 300 },
+        "heroTitle": { "type": "string", "maxLength": 140 },
+        "heroTitleAr": { "type": "string", "maxLength": 140 },
+        "heroSubtitle": { "type": "string", "maxLength": 300 },
+        "heroSubtitleAr": { "type": "string", "maxLength": 300 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Customer order saved to Firestore and forwarded via WhatsApp.",
+      "type": "object",
+      "properties": {
+        "orderNumber": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 24,
+          "pattern": "^[a-zA-Z0-9_-]+$"
+        },
+        "orderType": { "type": "string", "enum": ["pickup", "delivery"] },
+        "customerName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "customerPhone": { "type": "string", "minLength": 4, "maxLength": 40 },
+        "deliveryLocation": { "type": "string", "maxLength": 300 },
+        "mapsLink": { "type": "string", "maxLength": 500 },
+        "orderNote": { "type": "string", "maxLength": 400 },
+        "items": { "type": "array" },
+        "itemCount": { "type": "number" },
+        "total": { "type": "number" },
+        "status": {
+          "type": "string",
+          "enum": ["Pending", "Preparing", "Ready", "Completed", "Cancelled"]
+        },
+        "sourceApp": { "type": "string", "maxLength": 60 },
+        "lang": { "type": "string", "maxLength": 10 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["orderNumber", "customerName", "customerPhone", "items", "total", "status", "createdAt", "updatedAt"]
+    },
+    "AppReport": {
+      "title": "AppReport",
+      "description": "Activity, order, signup, or customer feedback report sent to Verda Admin.",
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["order", "feedback", "customer_signup", "issue"] },
+        "title": { "type": "string", "maxLength": 160 },
+        "message": { "type": "string", "maxLength": 1000 },
+        "orderId": { "type": "string", "maxLength": 128 },
+        "orderNumber": { "type": "string", "maxLength": 40 },
+        "orderType": { "type": "string", "maxLength": 20 },
+        "customerName": { "type": "string", "maxLength": 100 },
+        "customerPhone": { "type": "string", "maxLength": 40 },
+        "deliveryLocation": { "type": "string", "maxLength": 300 },
+        "mapsLink": { "type": "string", "maxLength": 500 },
+        "itemCount": { "type": "number" },
+        "total": { "type": "number" },
+        "status": { "type": "string", "enum": ["New", "Reviewed", "Resolved"] },
+        "sourceApp": { "type": "string", "maxLength": 60 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["type", "title", "status", "createdAt"]
+    },
+    "CustomerRecord": {
+      "title": "CustomerRecord",
+      "description": "Customer profile synced to Verda Admin on registration.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "maxLength": 100 },
+        "phone": { "type": "string", "maxLength": 40 },
+        "address": { "type": "string", "maxLength": 300 },
+        "mapsLink": { "type": "string", "maxLength": 500 },
+        "sourceApp": { "type": "string", "maxLength": 60 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "phone", "createdAt"]
+    },
+    "AdminUser": {
+      "title": "AdminUser",
+      "description": "Authorized store administrator record.",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "format": "email", "maxLength": 200 },
+        "role": { "type": "string", "enum": ["admin"] }
+      },
+      "required": ["email", "role"]
+    }
+  },
+  "firestore": {
+    "/billboards/{billboardId}": {
+      "schema": { "$ref": "#/entities/Billboard" },
+      "description": "Active promotional hero banners and videos controlled by Verda Admin."
+    },
+    "/offers/{offerId}": {
+      "schema": { "$ref": "#/entities/Billboard" },
+      "description": "Active store offers and campaigns synced from Verda Admin."
+    },
+    "/banners/{bannerId}": {
+      "schema": { "$ref": "#/entities/Billboard" },
+      "description": "Promotional banners synced from Verda Admin."
+    },
+    "/promotions/{promoId}": {
+      "schema": { "$ref": "#/entities/Billboard" },
+      "description": "Promotions synced from Verda Admin."
+    },
+    "/ads/{adId}": {
+      "schema": { "$ref": "#/entities/Billboard" },
+      "description": "Advertisements synced from Verda Admin."
+    },
+    "/advertisements/{adId}": {
+      "schema": { "$ref": "#/entities/Billboard" },
+      "description": "Alternative advertisements collection synced from Verda Admin."
+    },
+    "/menu/{itemId}": {
+      "schema": { "$ref": "#/entities/MenuItem" },
+      "description": "Primary menu collection controlled by Verda Admin."
+    },
+    "/menuItems/{itemId}": {
+      "schema": { "$ref": "#/entities/MenuItem" },
+      "description": "Alternative menu items collection controlled by Verda Admin."
+    },
+    "/products/{productId}": {
+      "schema": { "$ref": "#/entities/MenuItem" },
+      "description": "Alternative products collection controlled by Verda Admin."
+    },
+    "/items/{itemId}": {
+      "schema": { "$ref": "#/entities/MenuItem" },
+      "description": "Alternative items collection controlled by Verda Admin."
+    },
+    "/categories/{categoryId}": {
+      "schema": { "$ref": "#/entities/Category" },
+      "description": "Menu categories managed by Verda Admin."
+    },
+    "/settings/{settingId}": {
+      "schema": { "$ref": "#/entities/StoreSettings" },
+      "description": "Global storefront configuration controlled by Verda Admin."
+    },
+    "/storeConfig/{configId}": {
+      "schema": { "$ref": "#/entities/StoreSettings" },
+      "description": "Alternative store configuration controlled by Verda Admin."
+    },
+    "/orders/{orderId}": {
+      "schema": { "$ref": "#/entities/Order" },
+      "description": "Customer orders reported to Verda Admin and tracked live."
+    },
+    "/reports/{reportId}": {
+      "schema": { "$ref": "#/entities/AppReport" },
+      "description": "All customer app reports (orders, signups, feedback) sent to Verda Admin."
+    },
+    "/customers/{customerId}": {
+      "schema": { "$ref": "#/entities/CustomerRecord" },
+      "description": "Registered customer profiles reported to Verda Admin."
+    },
+    "/admins/{adminId}": {
+      "schema": { "$ref": "#/entities/AdminUser" },
+      "description": "Verified store administrator identities."
+    }
+  }
+}

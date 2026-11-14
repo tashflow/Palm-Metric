@@ -1,5 +1,12 @@
 import { initializeApp } from 'firebase/app';
-import { GoogleAuthProvider, getAuth, signInWithPopup, signOut, type User } from 'firebase/auth';
+import {
+  GoogleAuthProvider,
+  getAuth,
+  signInAnonymously,
+  signInWithPopup,
+  signOut,
+  type User,
+} from 'firebase/auth';
 import {
   collection,
   doc,
@@ -101,6 +108,16 @@ export async function signInWithGoogle(): Promise<User> {
   provider.setCustomParameters({ prompt: 'select_account' });
   const cred = await signInWithPopup(auth, provider);
   return cred.user;
+}
+
+export async function signInAsGuest(): Promise<User | null> {
+  if (auth.currentUser) return auth.currentUser;
+  try {
+    const cred = await signInAnonymously(auth);
+    return cred.user;
+  } catch {
+    return null;
+  }
 }
 
 export async function signOutFirebase(): Promise<void> {

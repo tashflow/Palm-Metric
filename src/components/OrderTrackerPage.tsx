@@ -214,8 +214,8 @@ export function OrderTrackerPage({
           </h1>
           <p className="mx-auto max-w-md text-sm text-[#4A6457]">
             {lang === 'ar'
-              ? 'قواعد الأمان تتيح عرض وتتبع طلباتك المربوطة بحساب Google الخاص بك مباشرة من لوحة الإدارة.'
-              : 'Security rules link orders to your verified Google account so only you and the store admin can view live status updates.'}
+              ? 'سجّل الدخول بحساب Google لعرض طلباتك السابقة ومتابعة حالة التحضير لحظة بلحظة.'
+              : 'Sign in with your Google account to view your recent orders and follow live preparation updates.'}
           </p>
           {authError && (
             <p className="mx-auto max-w-md rounded-xl bg-[#FEE4E2] px-3.5 py-2.5 text-xs font-bold text-[#912018]">

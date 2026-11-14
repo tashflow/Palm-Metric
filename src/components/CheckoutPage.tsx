@@ -2,13 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
-  Check,
   CheckCircle2,
   Clock,
-  Copy,
   ExternalLink,
   Loader2,
-  LogIn,
   MapPin,
   MessageCircle,
   Minus,
@@ -23,7 +20,7 @@ import type { User } from 'firebase/auth';
 import { BUSINESS } from '../data/menu';
 import { COPY } from '../data/i18n';
 import { useGeolocation } from '../hooks/useGeolocation';
-import { activeProjectId } from '../lib/firebase';
+import { auth, signInAsGuest } from '../lib/firebase';
 import { createOrder } from '../lib/firestoreSync';
 import type {
   CartItem,
@@ -159,8 +156,6 @@ export function CheckoutPage({
   );
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [signingIn, setSigningIn] = useState(false);
-  const [copiedDomain, setCopiedDomain] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
   const {
@@ -262,18 +257,22 @@ export function CheckoutPage({
 
     setSubmitting(true);
     try {
-      if (!firebaseUser) {
-        const signedIn = await onSignInGoogle();
-        if (!signedIn) {
-          setFormError(
-            lang === 'ar'
-              ? 'يرجى تسجيل الدخول بحساب Google أولاً لحفظ الطلب ومزامنته مع لوحة الإدارة.'
-              : 'Please sign in with Google first to save and sync your order with the Admin dashboard.',
-          );
-          setSubmitting(false);
-          return;
+      if (!auth.currentUser) {
+        const guest = await signInAsGuest();
+        if (!guest) {
+          const signedIn = await onSignInGoogle();
+          if (!signedIn) {
+            setFormError(
+              lang === 'ar'
+                ? 'يرجى تأكيد الدخول بحساب Google لإرسال الطلب وتتبعه.'
+                : 'Please complete Google Sign-In to confirm and track your order.',
+            );
+            setSubmitting(false);
+            return;
+          }
         }
       }
+
       const orderItems = cart.map((item) => {
         const tempLabel = item.temp ? (item.temp === 'hot' ? 'Hot' : 'Cold') : '';
         const mergedNote = [tempLabel, item.note].filter(Boolean).join(' · ');
@@ -287,7 +286,7 @@ export function CheckoutPage({
         };
       });
 
-      const created = await createOrder({
+      const orderPayload = {
         orderType,
         customerName: effectiveName,
         customerPhone: effectivePhone,
@@ -297,7 +296,33 @@ export function CheckoutPage({
         items: orderItems,
         total: subtotal,
         lang,
-      });
+      };
+
+      let created: { id: string; orderNumber: string };
+      try {
+        created = await createOrder(orderPayload);
+      } catch (firstErr) {
+        const errText = firstErr instanceof Error ? firstErr.message : String(firstErr);
+        const needsGoogleUpgrade =
+          Boolean(auth.currentUser?.isAnonymous) &&
+          errText.includes('Missing or insufficient permissions');
+
+        if (!needsGoogleUpgrade) {
+          throw firstErr;
+        }
+
+        const signedIn = await onSignInGoogle();
+        if (!signedIn) {
+          setFormError(
+            lang === 'ar'
+              ? 'يرجى تأكيد الدخول بحساب Google لإرسال الطلب وتتبعه.'
+              : 'Please complete Google Sign-In to confirm and track your order.',
+          );
+          setSubmitting(false);
+          return;
+        }
+        created = await createOrder(orderPayload);
+      }
 
       const whatsappUrl = buildBilingualWhatsAppSummary({
         orderNumber: created.orderNumber,
@@ -702,78 +727,10 @@ export function CheckoutPage({
               </div>
             )}
 
-            {!firebaseUser ? (
-              <div className="rounded-2xl border border-[#C9A227]/60 bg-[#EAE2D0] p-4 space-y-3">
-                <p className="text-xs sm:text-sm font-extrabold text-[#1A3C2F]">
-                  {lang === 'ar'
-                    ? 'تتطلب قواعد لوحة الإدارة تسجيل الدخول بحساب Google قبل إرسال الطلب وتتبعه مباشرة.'
-                    : 'Admin Firestore rules require Google Sign-In before submitting and tracking live orders.'}
-                </p>
-                <button
-                  type="button"
-                  disabled={signingIn}
-                  onClick={async () => {
-                    setSigningIn(true);
-                    setFormError(null);
-                    await onSignInGoogle();
-                    setSigningIn(false);
-                  }}
-                  className="palm-btn-forest inline-flex min-h-[42px] items-center gap-2 rounded-xl px-4 py-2 text-xs sm:text-sm font-bold cursor-pointer disabled:opacity-60"
-                >
-                  <LogIn className="h-4 w-4 text-[#C9A227]" />
-                  <span>
-                    {signingIn
-                      ? lang === 'ar'
-                        ? 'جاري تسجيل الدخول...'
-                        : 'Signing in...'
-                      : lang === 'ar'
-                        ? 'تسجيل الدخول عبر Google'
-                        : 'Sign in with Google'}
-                  </span>
-                </button>
-
-                {authError && (
-                  <div className="space-y-2 rounded-xl bg-[#FEE4E2] p-3 text-xs font-bold text-[#912018]">
-                    <p>{authError}</p>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          void navigator.clipboard
-                            ?.writeText(window.location.hostname)
-                            .then(() => {
-                              setCopiedDomain(true);
-                              window.setTimeout(() => setCopiedDomain(false), 2000);
-                            });
-                        }}
-                        className="inline-flex items-center gap-1 rounded-lg bg-[#1A3C2F] px-2.5 py-1.5 text-[11px] font-bold text-[#F5F0E6] cursor-pointer"
-                      >
-                        {copiedDomain ? (
-                          <Check className="h-3.5 w-3.5 text-[#C9A227]" />
-                        ) : (
-                          <Copy className="h-3.5 w-3.5 text-[#C9A227]" />
-                        )}
-                        <span>{copiedDomain ? 'Copied' : window.location.hostname}</span>
-                      </button>
-                      <a
-                        href={`https://console.firebase.google.com/project/${activeProjectId}/authentication/settings`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 rounded-lg bg-[#C9A227] px-2.5 py-1.5 text-[11px] font-extrabold text-[#142A20]"
-                      >
-                        <span>Authorized Domains</span>
-                        <ExternalLink className="h-3 w-3" />
-                      </a>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="rounded-xl bg-[#DCE8DE] px-3.5 py-2 text-xs font-bold text-[#1A3C2F]">
-                {lang === 'ar'
-                  ? `مسجل بحساب: ${firebaseUser.email || firebaseUser.displayName || 'Google'}`
-                  : `Signed in as: ${firebaseUser.email || firebaseUser.displayName || 'Google'}`}
-              </div>
+            {authError && (
+              <p role="alert" className="rounded-xl bg-[#FEE4E2] px-3.5 py-2.5 text-xs font-bold text-[#912018]">
+                {authError}
+              </p>
             )}
 
             {formError && (

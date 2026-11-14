@@ -40,7 +40,6 @@ interface CheckoutPageProps {
   currentUser: UserAccount | null;
   firebaseUser: User | null;
   authError?: string | null;
-  onSignInGoogle: () => Promise<User | null>;
   storeSettings?: StoreSettings;
   onUpdateQty: (cartKey: string, delta: number) => void;
   onUpdateNote: (cartKey: string, note: string) => void;
@@ -136,7 +135,6 @@ export function CheckoutPage({
   currentUser,
   firebaseUser,
   authError,
-  onSignInGoogle,
   storeSettings,
   onUpdateQty,
   onUpdateNote,
@@ -266,19 +264,7 @@ export function CheckoutPage({
     setSubmitting(true);
     try {
       if (!auth.currentUser) {
-        const guest = await signInAsGuest();
-        if (!guest) {
-          const signedIn = await onSignInGoogle();
-          if (!signedIn) {
-            setFormError(
-              lang === 'ar'
-                ? 'يرجى تأكيد الدخول بحساب Google لإرسال الطلب وتتبعه.'
-                : 'Please complete Google Sign-In to confirm and track your order.',
-            );
-            setSubmitting(false);
-            return;
-          }
-        }
+        await signInAsGuest();
       }
 
       const orderItems = cart.map((item) => {
@@ -311,30 +297,20 @@ export function CheckoutPage({
         lang,
       };
 
-      let created: { id: string; orderNumber: string };
-      try {
-        created = await createOrder(orderPayload);
-      } catch (firstErr) {
-        const errText = firstErr instanceof Error ? firstErr.message : String(firstErr);
-        const needsGoogleUpgrade =
-          Boolean(auth.currentUser?.isAnonymous) &&
-          errText.includes('Missing or insufficient permissions');
-
-        if (!needsGoogleUpgrade) {
-          throw firstErr;
+      let created: { id: string; orderNumber: string } | null = null;
+      if (auth.currentUser) {
+        try {
+          created = await createOrder(orderPayload);
+        } catch (cloudErr) {
+          console.warn('Cloud order sync unavailable for guest, continuing directly to WhatsApp:', cloudErr);
         }
+      }
 
-        const signedIn = await onSignInGoogle();
-        if (!signedIn) {
-          setFormError(
-            lang === 'ar'
-              ? 'يرجى تأكيد الدخول بحساب Google لإرسال الطلب وتتبعه.'
-              : 'Please complete Google Sign-In to confirm and track your order.',
-          );
-          setSubmitting(false);
-          return;
-        }
-        created = await createOrder(orderPayload);
+      if (!created) {
+        created = {
+          id: `wa-${Date.now()}`,
+          orderNumber: `PM-${Math.floor(1000 + Math.random() * 9000)}`,
+        };
       }
 
       const whatsappUrl = buildBilingualWhatsAppSummary({
@@ -368,22 +344,26 @@ export function CheckoutPage({
         updatedAtMs: nowMs,
       };
 
-      // Trigger WhatsApp deep link using an anchor element (avoids window.open)
-      const anchor = document.createElement('a');
-      anchor.href = whatsappUrl;
-      anchor.target = '_blank';
-      anchor.rel = 'noopener noreferrer';
-      document.body.appendChild(anchor);
-      anchor.click();
-      document.body.removeChild(anchor);
-
       onClearCart();
       onOrderPlaced(created.id, created.orderNumber, whatsappUrl, receiptOrder);
+
+      const isMobileDevice = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+      if (isMobileDevice) {
+        window.location.assign(whatsappUrl);
+      } else {
+        const anchor = document.createElement('a');
+        anchor.href = whatsappUrl;
+        anchor.target = '_blank';
+        anchor.rel = 'noopener noreferrer';
+        document.body.appendChild(anchor);
+        anchor.click();
+        document.body.removeChild(anchor);
+      }
     } catch (err) {
       const msg =
         err instanceof Error && !err.message.startsWith('{')
           ? err.message
-          : 'Could not save order to Firestore. Please try again.';
+          : 'Could not place order. Please try again.';
       setFormError(msg);
     } finally {
       setSubmitting(false);

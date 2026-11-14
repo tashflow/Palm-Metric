@@ -74,7 +74,12 @@ export function OrderTrackerPage({
   const [lookedUpOrder, setLookedUpOrder] = useState<Order | null>(null);
   const [customerOrders, setCustomerOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState<boolean>(
-    Boolean(activeOrderId && firebaseUser && !activeLiveOrder),
+    Boolean(
+      activeOrderId &&
+        firebaseUser &&
+        !activeLiveOrder &&
+        !activeOrderId.startsWith('wa-'),
+    ),
   );
   const [error, setError] = useState<string | null>(null);
   const [lookupInput, setLookupInput] = useState('');
@@ -112,9 +117,10 @@ export function OrderTrackerPage({
   }, [firebaseUser?.uid, activeOrderId, onSelectOrderId]);
 
   useEffect(() => {
-    if (!activeOrderId || !firebaseUser) {
+    if (!activeOrderId || !firebaseUser || activeOrderId.startsWith('wa-')) {
       setLookedUpOrder(null);
       setLoading(false);
+      setError(null);
       return;
     }
 
@@ -185,6 +191,7 @@ export function OrderTrackerPage({
       });
 
   const isPickupOrder = displayOrder?.orderType === 'pickup';
+  const isWhatsappOnlyOrder = Boolean(displayOrder?.id.startsWith('wa-'));
 
   return (
     <div className="mx-auto max-w-3xl px-4 pt-6 pb-20 sm:px-6 space-y-5">
@@ -374,18 +381,26 @@ export function OrderTrackerPage({
                     </span>
                   </div>
                   <h1 className="mt-2 text-2xl sm:text-3xl font-extrabold text-[#1A3C2F]">
-                    {displayOrder.status === 'Pending' && t.statusPendingTitle}
-                    {displayOrder.status === 'Preparing' && t.statusPreparingTitle}
-                    {displayOrder.status === 'Ready' &&
-                      (isPickupOrder
-                        ? lang === 'ar'
-                          ? 'طلبك جاهز للاستلام!'
-                          : 'Your order is ready for pickup!'
-                        : lang === 'ar'
-                          ? 'طلبك جاهز للتوصيل!'
-                          : 'Your order is ready for delivery!')}
-                    {displayOrder.status === 'Completed' && t.statusCompletedTitle}
-                    {displayOrder.status === 'Cancelled' && t.statusCancelledTitle}
+                    {isWhatsappOnlyOrder
+                      ? lang === 'ar'
+                        ? 'تم تجهيز طلبك عبر واتساب!'
+                        : 'Your order is ready on WhatsApp!'
+                      : (
+                        <>
+                          {displayOrder.status === 'Pending' && t.statusPendingTitle}
+                          {displayOrder.status === 'Preparing' && t.statusPreparingTitle}
+                          {displayOrder.status === 'Ready' &&
+                            (isPickupOrder
+                              ? lang === 'ar'
+                                ? 'طلبك جاهز للاستلام!'
+                                : 'Your order is ready for pickup!'
+                              : lang === 'ar'
+                                ? 'طلبك جاهز للتوصيل!'
+                                : 'Your order is ready for delivery!')}
+                          {displayOrder.status === 'Completed' && t.statusCompletedTitle}
+                          {displayOrder.status === 'Cancelled' && t.statusCancelledTitle}
+                        </>
+                      )}
                   </h1>
 
                   {displayOrder.status === 'Ready' && alarmStoppedForOrder && !isAlarmRinging && (
@@ -419,7 +434,7 @@ export function OrderTrackerPage({
                 </div>
               </div>
 
-              {displayOrder.status !== 'Cancelled' && (
+              {displayOrder.status !== 'Cancelled' && !isWhatsappOnlyOrder && (
                 <div className="mt-7 grid grid-cols-4 gap-2">
                   {steps.map((step, idx) => {
                     const reached = idx <= currentStepIdx;
@@ -448,6 +463,14 @@ export function OrderTrackerPage({
                       </div>
                     );
                   })}
+                </div>
+              )}
+
+              {isWhatsappOnlyOrder && (
+                <div className="mt-4 rounded-2xl bg-[#DCE8DE] px-4 py-3 text-xs sm:text-sm font-bold text-[#1A3C2F]">
+                  {lang === 'ar'
+                    ? 'إيصالك محفوظ أدناه. إذا لم يُفتح تطبيق واتساب تلقائياً، اضغط على زر «إرسال ملخص الطلب عبر واتساب».'
+                    : 'Your receipt is saved below. If WhatsApp did not open automatically, tap "Open Order Summary in WhatsApp".'}
                 </div>
               )}
             </div>

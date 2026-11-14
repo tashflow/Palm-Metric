@@ -59,7 +59,20 @@ export default function App() {
     }
   });
 
-  const [view, setView] = useState<PageView>('menu');
+  const [pendingReturnOrderId] = useState<string | null>(() => {
+    try {
+      const id = sessionStorage.getItem('palm_metric_return_track');
+      if (id) {
+        sessionStorage.removeItem('palm_metric_return_track');
+        return id;
+      }
+    } catch {
+      // ignore storage failures
+    }
+    return null;
+  });
+
+  const [view, setView] = useState<PageView>(() => (pendingReturnOrderId ? 'track' : 'menu'));
 
   const [billboards, setBillboards] = useState<Billboard[]>([]);
   const [billboardsLoading, setBillboardsLoading] = useState(true);
@@ -122,7 +135,9 @@ export default function App() {
   });
   const [activeLiveOrder, setActiveLiveOrder] = useState<Order | null>(null);
   const [stoppedAlarmOrderIds, setStoppedAlarmOrderIds] = useState<string[]>([]);
-  const [justPlacedOrderId, setJustPlacedOrderId] = useState<string | null>(null);
+  const [justPlacedOrderId, setJustPlacedOrderId] = useState<string | null>(
+    () => pendingReturnOrderId,
+  );
 
   const currentUser = useMemo(
     () => accounts.find((acc) => acc.id === currentUserId) ?? null,
@@ -156,7 +171,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!activeOrderId || !currentFirebaseUser) {
+    if (!activeOrderId || !currentFirebaseUser || activeOrderId.startsWith('wa-')) {
       setActiveLiveOrder(null);
       return;
     }
@@ -355,6 +370,11 @@ export default function App() {
       const filtered = prev.filter((o) => o.id !== orderId);
       return [{ id: orderId, orderNumber, whatsappUrl, receiptSnapshot: receiptOrder }, ...filtered].slice(0, 10);
     });
+    try {
+      sessionStorage.setItem('palm_metric_return_track', orderId);
+    } catch {
+      // ignore storage failures
+    }
     setActiveOrderId(orderId);
     setJustPlacedOrderId(orderId);
     navigate('track');
@@ -609,7 +629,6 @@ export default function App() {
             currentUser={currentUser}
             firebaseUser={currentFirebaseUser}
             authError={authError}
-            onSignInGoogle={handleGoogleSignIn}
             storeSettings={storeSettings}
             onUpdateQty={handleUpdateQty}
             onUpdateNote={handleUpdateNote}

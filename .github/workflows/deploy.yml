@@ -24,15 +24,18 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
 
       - name: Install dependencies
-        run: npm install
+        run: bun install
 
       - name: Build production bundle
         env:
           VITE_GOOGLE_MAPS_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
-        run: npm run build
+        run: bun run build
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

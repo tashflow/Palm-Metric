@@ -115,7 +115,8 @@ export async function signInAsGuest(): Promise<User | null> {
   try {
     const cred = await signInAnonymously(auth);
     return cred.user;
-  } catch {
+  } catch (err) {
+    console.warn('Anonymous guest auth unavailable in Firebase project:', err);
     return null;
   }
 }

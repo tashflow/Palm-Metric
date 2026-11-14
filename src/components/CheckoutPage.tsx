@@ -298,12 +298,10 @@ export function CheckoutPage({
       };
 
       let created: { id: string; orderNumber: string } | null = null;
-      if (auth.currentUser) {
-        try {
-          created = await createOrder(orderPayload);
-        } catch (cloudErr) {
-          console.warn('Cloud order sync unavailable for guest, continuing directly to WhatsApp:', cloudErr);
-        }
+      try {
+        created = await createOrder(orderPayload);
+      } catch (cloudErr) {
+        console.warn('Cloud order sync unavailable for guest, continuing directly to WhatsApp:', cloudErr);
       }
 
       if (!created) {
@@ -347,7 +345,9 @@ export function CheckoutPage({
       onClearCart();
       onOrderPlaced(created.id, created.orderNumber, whatsappUrl, receiptOrder);
 
-      const isMobileDevice = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+      const isMobileDevice =
+        /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
       if (isMobileDevice) {
         window.location.assign(whatsappUrl);
       } else {

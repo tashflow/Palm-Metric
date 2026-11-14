@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { BellOff, BellRing, Check } from 'lucide-react';
 import { AccountPage } from './components/AccountPage';
@@ -11,7 +11,7 @@ import { MenuItemModal } from './components/MenuItemModal';
 import { MenuPage } from './components/MenuPage';
 import { OrderTrackerPage } from './components/OrderTrackerPage';
 import { COPY } from './data/i18n';
-import { activeProjectId, auth, signInWithGoogle } from './lib/firebase';
+import { activeProjectId, auth, signInAsGuest, signInWithGoogle } from './lib/firebase';
 import {
   seedPalmMetricMenuForAdmin,
   subscribeBillboards,
@@ -144,9 +144,15 @@ export default function App() {
     [accounts, currentUserId],
   );
 
+  const guestAuthAttemptedRef = useRef(false);
+
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, (user) => {
       setCurrentFirebaseUser(user);
+      if (!user && !guestAuthAttemptedRef.current) {
+        guestAuthAttemptedRef.current = true;
+        void signInAsGuest();
+      }
     });
     return () => unsubAuth();
   }, []);

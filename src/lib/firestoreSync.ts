@@ -269,10 +269,7 @@ export interface CreateOrderInput {
 export async function createOrder(
   input: CreateOrderInput,
 ): Promise<{ id: string; orderNumber: string }> {
-  const currentUser = auth.currentUser;
-  if (!currentUser) {
-    throw new Error('Please sign in with Google first to submit and track your order.');
-  }
+  const customerUid = auth.currentUser?.uid || `guest_${Date.now()}`;
 
   const customerName = input.customerName.trim().slice(0, 80);
   const customerContact = input.customerPhone.trim().slice(0, 80);
@@ -319,7 +316,7 @@ export async function createOrder(
   // Matches Admin App's strict isValidOrder(data) rule schema
   const payload: Record<string, unknown> = {
     orderNumber,
-    customerUid: currentUser.uid,
+    customerUid,
     customerName,
     customerContact,
     items: sanitizedItems,

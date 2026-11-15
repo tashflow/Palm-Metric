@@ -316,6 +316,7 @@ export async function createOrder(
   // Matches Admin App's strict isValidOrderCreate(data) rule schema
   const payload: Record<string, unknown> = {
     orderNumber,
+    customerUid,
     orderType: input.orderType,
     customerName,
     customerPhone: customerContact,

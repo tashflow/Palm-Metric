@@ -194,7 +194,7 @@ service cloud.firestore {
     // Order validation blueprints
     function isValidOrderCreate(data) {
       return data.keys().hasAll(['orderNumber', 'customerName', 'customerPhone', 'items', 'total', 'status', 'createdAt', 'updatedAt'])
-        && data.keys().hasOnly(['orderNumber', 'orderType', 'customerName', 'customerPhone', 'deliveryLocation', 'mapsLink', 'orderNote', 'items', 'itemCount', 'total', 'status', 'sourceApp', 'lang', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['orderNumber', 'orderType', 'customerName', 'customerPhone', 'deliveryLocation', 'mapsLink', 'orderNote', 'items', 'itemCount', 'total', 'status', 'sourceApp', 'lang', 'customerUid', 'createdAt', 'updatedAt'])
         && data.orderNumber is string && data.orderNumber.size() >= 3 && data.orderNumber.size() <= 24 && data.orderNumber.matches('^[a-zA-Z0-9_\\-]+$')
         && data.customerName is string && data.customerName.size() >= 1 && data.customerName.size() <= 100
         && data.customerPhone is string && data.customerPhone.size() >= 4 && data.customerPhone.size() <= 40
@@ -205,6 +205,7 @@ service cloud.firestore {
         && (!('itemCount' in data) || (data.itemCount is number && data.itemCount >= 1 && data.itemCount <= 500))
         && (!('sourceApp' in data) || (data.sourceApp is string && data.sourceApp.size() <= 60))
         && (!('lang' in data) || (data.lang is string && data.lang.size() <= 10))
+        && (!('customerUid' in data) || (data.customerUid is string && data.customerUid.size() <= 128))
         && data.items is list && data.items.size() >= 1 && data.items.size() <= 50
         && data.items[0] is map
         && data.total is number && data.total >= 0 && data.total <= 50000
@@ -215,7 +216,7 @@ service cloud.firestore {
 
     function isValidOrderUpdate(data) {
       return data.keys().hasAll(['orderNumber', 'customerName', 'customerPhone', 'items', 'total', 'status', 'createdAt', 'updatedAt'])
-        && data.keys().hasOnly(['orderNumber', 'orderType', 'customerName', 'customerPhone', 'deliveryLocation', 'mapsLink', 'orderNote', 'items', 'itemCount', 'total', 'status', 'sourceApp', 'lang', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['orderNumber', 'orderType', 'customerName', 'customerPhone', 'deliveryLocation', 'mapsLink', 'orderNote', 'items', 'itemCount', 'total', 'status', 'sourceApp', 'lang', 'customerUid', 'createdAt', 'updatedAt'])
         && data.orderNumber == existing().orderNumber
         && data.customerName == existing().customerName
         && data.customerPhone == existing().customerPhone

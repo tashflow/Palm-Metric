@@ -174,6 +174,19 @@ export function subscribeBillboards(
   );
 }
 
+const FALLBACK_MENU_ITEMS: MenuItem[] = MENU_ITEMS.map((item) => ({
+  id: item.id,
+  name: item.nameEn,
+  nameAr: item.nameAr,
+  nameEn: item.nameEn,
+  description: '',
+  price: item.price,
+  category: 'Specialty',
+  imageUrl: '',
+  inStock: true,
+  supportsTemp: item.supportsTemp,
+}));
+
 export function subscribeMenu(
   onData: (items: MenuItem[]) => void,
   onError: (err: Error) => void,
@@ -185,6 +198,10 @@ export function subscribeMenu(
     menuQuery,
     async (snapshot) => {
       try {
+        if (snapshot.empty) {
+          onData(FALLBACK_MENU_ITEMS);
+          return;
+        }
         const resolved = await Promise.all(
           snapshot.docs.map(async (d) => {
             const data = d.data();
@@ -232,17 +249,15 @@ export function subscribeMenu(
           if (a.category !== b.category) return a.category.localeCompare(b.category);
           return a.name.localeCompare(b.name);
         });
-        onData(resolved);
+        onData(resolved.length > 0 ? resolved : FALLBACK_MENU_ITEMS);
       } catch (err) {
-        onError(err instanceof Error ? err : new Error(String(err)));
+        console.warn('Error processing menu snapshot, falling back to local catalog:', err);
+        onData(FALLBACK_MENU_ITEMS);
       }
     },
     (error) => {
-      try {
-        handleFirestoreError(error, OperationType.LIST, 'menu');
-      } catch (wrapped) {
-        onError(wrapped instanceof Error ? wrapped : new Error(String(wrapped)));
-      }
+      console.warn('Menu Firestore query offline/unavailable, falling back to local catalog:', error);
+      onData(FALLBACK_MENU_ITEMS);
     },
   );
 }

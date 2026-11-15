@@ -313,22 +313,34 @@ export async function createOrder(
     .join(' | ')
     .slice(0, 240);
 
-  // Matches Admin App's strict isValidOrder(data) rule schema
+  // Matches Admin App's strict isValidOrderCreate(data) rule schema
   const payload: Record<string, unknown> = {
     orderNumber,
-    customerUid,
+    orderType: input.orderType,
     customerName,
-    customerContact,
+    customerPhone: customerContact,
     items: sanitizedItems,
-    totalBill: cleanTotal,
+    total: cleanTotal,
     status: 'Pending',
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   };
 
-  if (combinedNotes) {
-    payload.notes = combinedNotes;
+  if (deliveryLocation) {
+    payload.deliveryLocation = deliveryLocation;
   }
+  if (mapsLink) {
+    payload.mapsLink = mapsLink;
+  }
+  if (orderNote) {
+    payload.orderNote = orderNote;
+  }
+  const itemCount = sanitizedItems.reduce((sum, item) => sum + item.quantity, 0);
+  if (itemCount > 0) {
+    payload.itemCount = itemCount;
+  }
+  payload.sourceApp = 'palm-metric-order';
+  payload.lang = input.lang ?? 'ar';
 
   try {
     await setDoc(orderRef, payload);

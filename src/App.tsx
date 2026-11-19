@@ -11,6 +11,7 @@ import { MenuItemModal } from './components/MenuItemModal';
 import { MenuPage } from './components/MenuPage';
 import { OrderTrackerPage } from './components/OrderTrackerPage';
 import { COPY } from './data/i18n';
+import { motion } from 'motion/react';
 import { activeProjectId, auth, signInAsGuest, signInWithGoogle } from './lib/firebase';
 import {
   seedPalmMetricMenuForAdmin,
@@ -31,6 +32,7 @@ import type {
   Language,
   MenuItem,
   Order,
+  OrderLineItem,
   PageView,
   StoreSettings,
   TempChoice,
@@ -475,9 +477,15 @@ export default function App() {
     const name = input.name.trim();
     const phone = input.phone.trim();
     const password = input.password.trim();
-    const address = input.address.trim();
+    let address = input.address.trim();
 
-    if (!name || !phone || !password || !address) {
+    if (!name || !phone || !password) {
+      return t.errAllFieldsRequired;
+    }
+    if (!address && input.location) {
+      address = `GPS (${input.location.lat}, ${input.location.lng})`;
+    }
+    if (!address) {
       return t.errAllFieldsRequired;
     }
 
@@ -510,6 +518,21 @@ export default function App() {
 
   const handleLogout = () => {
     setCurrentUserId(null);
+  };
+
+  const handleReorder = (items: OrderLineItem[]) => {
+    setCart(
+      items.map((i) => ({
+        cartKey: `${i.itemId}::${(i.note || '').toLowerCase()}`,
+        itemId: i.itemId,
+        name: i.name,
+        price: i.price,
+        imageUrl: i.imageUrl,
+        quantity: i.quantity,
+        note: i.note,
+      })),
+    );
+    navigate('checkout');
   };
 
   const cartCount = useMemo(
@@ -605,92 +628,129 @@ export default function App() {
 
       <main className="flex-1">
         {view === 'menu' && (
-          <MenuPage
-            lang={lang}
-            billboards={billboards}
-            billboardsLoading={billboardsLoading}
-            items={menuItems}
-            menuLoading={menuLoading}
-            menuError={menuError}
-            authError={authError}
-            onDismissAuthError={() => setAuthError(null)}
-            cart={cart}
-            storeSettings={storeSettings}
-            onQuickAdd={(item, temp) => addToCart(item, 1, '', temp)}
-            onUpdateQty={handleUpdateQty}
-            onSelectItem={setSelectedItem}
-            onOpenInfo={() => navigate('info')}
-            canSeedCatalog={canSeedCatalog}
-            seeding={seeding}
-            onSeedCatalog={handleSeedCatalog}
-            onSignInAdmin={handleGoogleSignIn}
-            isSignedIn={Boolean(currentFirebaseUser)}
-          />
+          <motion.div
+            key="menu"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.25 }}
+          >
+            <MenuPage
+              lang={lang}
+              billboards={billboards}
+              billboardsLoading={billboardsLoading}
+              items={menuItems}
+              menuLoading={menuLoading}
+              menuError={menuError}
+              authError={authError}
+              onDismissAuthError={() => setAuthError(null)}
+              cart={cart}
+              storeSettings={storeSettings}
+              onQuickAdd={(item, temp) => addToCart(item, 1, '', temp)}
+              onUpdateQty={handleUpdateQty}
+              onSelectItem={setSelectedItem}
+              onOpenInfo={() => navigate('info')}
+              canSeedCatalog={canSeedCatalog}
+              seeding={seeding}
+              onSeedCatalog={handleSeedCatalog}
+              onSignInAdmin={handleGoogleSignIn}
+              isSignedIn={Boolean(currentFirebaseUser)}
+            />
+          </motion.div>
         )}
 
         {view === 'checkout' && (
-          <CheckoutPage
-            lang={lang}
-            cart={cart}
-            currentUser={currentUser}
-            firebaseUser={currentFirebaseUser}
-            authError={authError}
-            storeSettings={storeSettings}
-            onUpdateQty={handleUpdateQty}
-            onUpdateNote={handleUpdateNote}
-            onClearCart={() => setCart([])}
-            onBackToMenu={() => navigate('menu')}
-            onOpenAccount={() => navigate('account')}
-            onUpdateSavedLocation={handleUpdateUserLocation}
-            onOrderPlaced={handleOrderPlaced}
-          />
+          <motion.div
+            key="checkout"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.25 }}
+          >
+            <CheckoutPage
+              lang={lang}
+              cart={cart}
+              currentUser={currentUser}
+              firebaseUser={currentFirebaseUser}
+              authError={authError}
+              storeSettings={storeSettings}
+              onUpdateQty={handleUpdateQty}
+              onUpdateNote={handleUpdateNote}
+              onClearCart={() => setCart([])}
+              onBackToMenu={() => navigate('menu')}
+              onOpenAccount={() => navigate('account')}
+              onUpdateSavedLocation={handleUpdateUserLocation}
+              onOrderPlaced={handleOrderPlaced}
+            />
+          </motion.div>
         )}
 
         {view === 'track' && (
-          <OrderTrackerPage
-            lang={lang}
-            firebaseUser={currentFirebaseUser}
-            authError={authError}
-            onSignInGoogle={handleGoogleSignIn}
-            recentOrders={trackedOrders}
-            activeOrderId={activeOrderId}
-            activeLiveOrder={activeLiveOrder}
-            isAlarmRinging={isAlarmRinging}
-            alarmStoppedForOrder={Boolean(
-              activeLiveOrder && stoppedAlarmOrderIds.includes(activeLiveOrder.id),
-            )}
-            onStopAlarm={handleStopAlarm}
-            justPlacedOrderId={justPlacedOrderId}
-            onSelectOrderId={(id) => {
-              setActiveOrderId(id);
-              setTrackedOrders((prev) => {
-                if (prev.some((o) => o.id === id)) return prev;
-                return [{ id, orderNumber: id.slice(0, 8).toUpperCase() }, ...prev].slice(0, 10);
-              });
-            }}
-            onBackToMenu={() => navigate('menu')}
-          />
+          <motion.div
+            key="track"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.25 }}
+          >
+            <OrderTrackerPage
+              lang={lang}
+              firebaseUser={currentFirebaseUser}
+              authError={authError}
+              onSignInGoogle={handleGoogleSignIn}
+              recentOrders={trackedOrders}
+              activeOrderId={activeOrderId}
+              activeLiveOrder={activeLiveOrder}
+              isAlarmRinging={isAlarmRinging}
+              alarmStoppedForOrder={Boolean(
+                activeLiveOrder && stoppedAlarmOrderIds.includes(activeLiveOrder.id),
+              )}
+              onStopAlarm={handleStopAlarm}
+              justPlacedOrderId={justPlacedOrderId}
+              onSelectOrderId={(id) => {
+                setActiveOrderId(id);
+                setTrackedOrders((prev) => {
+                  if (prev.some((o) => o.id === id)) return prev;
+                  return [{ id, orderNumber: id.slice(0, 8).toUpperCase() }, ...prev].slice(0, 10);
+                });
+              }}
+              onBackToMenu={() => navigate('menu')}
+            />
+          </motion.div>
         )}
 
         {view === 'account' && (
-          <AccountPage
-            lang={lang}
-            currentUser={currentUser}
-            onLogin={handleLogin}
-            onRegister={handleRegister}
-            onUpdateLocation={handleUpdateUserLocation}
-            onLogout={handleLogout}
-            onBackToMenu={() => navigate('menu')}
-          />
+          <motion.div
+            key="account"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.25 }}
+          >
+            <AccountPage
+              lang={lang}
+              currentUser={currentUser}
+              firebaseUser={currentFirebaseUser}
+              onLogin={handleLogin}
+              onRegister={handleRegister}
+              onUpdateLocation={handleUpdateUserLocation}
+              onLogout={handleLogout}
+              onBackToMenu={() => navigate('menu')}
+              onReorder={handleReorder}
+            />
+          </motion.div>
         )}
 
         {view === 'info' && (
-          <InfoPage
-            lang={lang}
-            currentUser={currentUser}
-            storeSettings={storeSettings}
-            onBackToMenu={() => navigate('menu')}
-          />
+          <motion.div
+            key="info"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.25 }}
+          >
+            <InfoPage
+              lang={lang}
+              currentUser={currentUser}
+              storeSettings={storeSettings}
+              onBackToMenu={() => navigate('menu')}
+            />
+          </motion.div>
         )}
       </main>
 

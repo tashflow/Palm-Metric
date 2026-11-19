@@ -124,6 +124,41 @@ function DeliveryMapInner({
   const { loading: locating, error: geoError, getCurrentLocation, clearError } = useGeolocation();
   const sessionTokenRef = useRef<unknown>(null);
 
+  const reverseGeocode = useCallback(
+    (loc: GeoLocation) => {
+      clearError();
+      onLocationChange(loc);
+
+      const win = window as unknown as {
+        google?: {
+          maps?: {
+            Geocoder: new () => {
+              geocode: (
+                req: { location: { lat: number; lng: number } },
+                callback: (results: Array<{ formatted_address?: string }> | null, status: string) => void,
+              ) => void;
+            };
+          };
+        };
+      };
+
+      if (win.google?.maps?.Geocoder) {
+        const geocoder = new win.google.maps.Geocoder();
+        geocoder.geocode(
+          { location: { lat: loc.lat, lng: loc.lng } },
+          (results: Array<{ formatted_address?: string }> | null, status: string) => {
+            if (status === 'OK' && results && results[0]?.formatted_address) {
+              const address = results[0].formatted_address;
+              setSearchText(address);
+              onLocationChange(loc, address);
+            }
+          },
+        );
+      }
+    },
+    [onLocationChange, clearError],
+  );
+
   useEffect(() => {
     if (!placesLib || !searchText.trim()) {
       setSuggestions([]);
@@ -322,8 +357,7 @@ function DeliveryMapInner({
               lat: Number(coords.lat.toFixed(6)),
               lng: Number(coords.lng.toFixed(6)),
             };
-            clearError();
-            onLocationChange(nextLoc);
+            reverseGeocode(nextLoc);
           }}
         >
           {location && (
@@ -338,8 +372,7 @@ function DeliveryMapInner({
                   lat: Number(pos.lat().toFixed(6)),
                   lng: Number(pos.lng().toFixed(6)),
                 };
-                clearError();
-                onLocationChange(nextLoc);
+                reverseGeocode(nextLoc);
               }}
             >
               <Pin

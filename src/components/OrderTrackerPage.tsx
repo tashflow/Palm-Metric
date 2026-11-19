@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
+  Bell,
   BellOff,
   BellRing,
   CheckCircle2,
@@ -21,6 +22,7 @@ import type { User } from 'firebase/auth';
 import { BUSINESS } from '../data/menu';
 import { COPY } from '../data/i18n';
 import { subscribeCustomerOrders, subscribeOrder } from '../lib/firestoreSync';
+import { initFCM } from '../lib/fcm';
 import type { Language, Order, OrderStatus, TrackedOrderMeta } from '../types';
 import { StorageImage } from './MediaAsset';
 
@@ -155,6 +157,33 @@ export function OrderTrackerPage({
     lookedUpOrder ??
     activeMeta?.receiptSnapshot ??
     null;
+
+  const [pushEnabled, setPushEnabled] = useState<boolean>(
+    typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted',
+  );
+  const [pushing, setPushing] = useState(false);
+
+  useEffect(() => {
+    if (displayOrder?.status === 'Ready' && 'Notification' in window && Notification.permission === 'granted') {
+      try {
+        new Notification(lang === 'ar' ? 'طلبك جاهز في بالم مترك!' : 'Palm Metric: Order Ready!', {
+          body: lang === 'ar' ? `طلبك ${displayOrder.orderNumber} أصبح جاهزاً.` : `Order ${displayOrder.orderNumber} is now ready!`,
+          icon: '/favicon.ico',
+        });
+      } catch (err) {
+        console.warn('Failed to trigger background ready notification:', err);
+      }
+    }
+  }, [displayOrder?.status, displayOrder?.orderNumber, lang]);
+
+  const handleEnablePush = async () => {
+    setPushing(true);
+    const token = await initFCM();
+    if (token || (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted')) {
+      setPushEnabled(true);
+    }
+    setPushing(false);
+  };
 
   const steps: { status: OrderStatus; label: string; hint: string }[] = [
     { status: 'Pending', label: t.stepPending, hint: t.stepPendingHint },
@@ -364,6 +393,32 @@ export function OrderTrackerPage({
         </div>
       ) : (
         <div className="space-y-5">
+          {typeof window !== 'undefined' && 'Notification' in window && !pushEnabled && (
+            <div className="flex items-center justify-between gap-3 rounded-2xl bg-[#EAE2D0] border border-[#C9A227]/40 p-4 shadow-xs">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#1A3C2F] text-[#C9A227]">
+                  <Bell className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-xs sm:text-sm font-extrabold text-[#1A3C2F]">
+                    {lang === 'ar' ? 'تفعيل إشعارات الفورية لتنبيهك عند جاهزية الطلب' : 'Enable push notifications to get alerted when your order is ready'}
+                  </p>
+                  <p className="text-[11px] text-[#546E61]">
+                    {lang === 'ar' ? 'يضمن تنبيهك حتى لو كان التطبيق في الخلفية' : 'Ensures you get notified even in the background'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                disabled={pushing}
+                onClick={handleEnablePush}
+                className="palm-btn-gold min-h-[40px] rounded-xl px-4 py-2 text-xs font-extrabold shrink-0 cursor-pointer disabled:opacity-60"
+              >
+                {pushing ? '...' : t.enablePushBtn}
+              </button>
+            </div>
+          )}
+
           {/* Live Order Status Card */}
           <div className="palm-card rounded-3xl overflow-hidden">
             <div className="border-b border-[#1A3C2F]/10 bg-[#EAE2D0] p-5 sm:p-7">

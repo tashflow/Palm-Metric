@@ -11,9 +11,6 @@ interface MenuItemModalProps {
   onAddToCart: (item: MenuItem, quantity: number, note: string, temp?: TempChoice) => void;
 }
 
-const PRESETS_AR = ['حرارة إضافية', 'سكر أقل', 'حليب شوفان', 'ثلج خفيف'];
-const PRESETS_EN = ['Extra hot', 'Less sugar', 'Oat milk', 'Light ice'];
-
 export function MenuItemModal({
   lang,
   item,
@@ -22,38 +19,21 @@ export function MenuItemModal({
 }: MenuItemModalProps) {
   const t = COPY[lang];
   const [quantity, setQuantity] = useState(1);
-  const [note, setNote] = useState('');
   const [temp, setTemp] = useState<TempChoice>('hot');
 
   useEffect(() => {
     if (item) {
       setQuantity(1);
-      setNote('');
       setTemp('hot');
     }
   }, [item]);
 
   if (!item) return null;
 
-  const presets = lang === 'ar' ? PRESETS_AR : PRESETS_EN;
-
-  const togglePreset = (preset: string) => {
-    const parts = note
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean);
-    const exists = parts.some((p) => p.toLowerCase() === preset.toLowerCase());
-    if (exists) {
-      setNote(parts.filter((p) => p.toLowerCase() !== preset.toLowerCase()).join(', '));
-    } else {
-      setNote([...parts, preset].join(', '));
-    }
-  };
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!item.inStock) return;
-    onAddToCart(item, quantity, note.trim(), item.supportsTemp ? temp : undefined);
+    onAddToCart(item, quantity, '', item.supportsTemp ? temp : undefined);
     onClose();
   };
 
@@ -135,44 +115,6 @@ export function MenuItemModal({
               </button>
             </div>
           )}
-
-          <div>
-            <label htmlFor="modal-note" className="block text-xs font-bold text-[#3B594B]">
-              {t.notesLabel}
-            </label>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {presets.map((preset) => {
-                const selected = note
-                  .toLowerCase()
-                  .split(',')
-                  .map((s) => s.trim())
-                  .includes(preset.toLowerCase());
-                return (
-                  <button
-                    key={preset}
-                    type="button"
-                    onClick={() => togglePreset(preset)}
-                    className={`min-h-[36px] rounded-xl px-3 py-1.5 text-xs font-bold cursor-pointer ${
-                      selected
-                        ? 'bg-[#1A3C2F] text-[#C9A227]'
-                        : 'bg-[#E6DEC8] text-[#3B594B] hover:bg-[#DDD3B8]'
-                    }`}
-                  >
-                    {preset}
-                  </button>
-                );
-              })}
-            </div>
-            <input
-              id="modal-note"
-              type="text"
-              maxLength={200}
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder={t.notesPlaceholder}
-              className="mt-2.5 h-11 w-full rounded-xl border border-[#1A3C2F]/20 bg-white px-3.5 text-sm text-[#1A3C2F] focus:border-[#C9A227] focus:outline-none"
-            />
-          </div>
 
           <div className="flex items-center gap-3 pt-3 border-t border-[#1A3C2F]/10">
             <div className="flex items-center rounded-xl bg-[#1A3C2F] p-1 text-[#F5F0E6]">

@@ -1,18 +1,22 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
   LogOut,
   MapPin,
+  Package,
   User,
 } from 'lucide-react';
+import type { User as FirebaseUser } from 'firebase/auth';
 import { COPY } from '../data/i18n';
-import type { GeoLocation, Language, UserAccount } from '../types';
+import { subscribeCustomerOrders } from '../lib/firestoreSync';
+import type { GeoLocation, Language, Order, OrderLineItem, UserAccount } from '../types';
 import { DeliveryMapPicker } from './GoogleMapsLocation';
 
 interface AccountPageProps {
   lang: Language;
   currentUser: UserAccount | null;
+  firebaseUser?: FirebaseUser | null;
   onLogin: (phone: string, password: string) => string | null;
   onRegister: (input: {
     name: string;
@@ -24,16 +28,19 @@ interface AccountPageProps {
   onUpdateLocation: (loc: GeoLocation) => void;
   onLogout: () => void;
   onBackToMenu: () => void;
+  onReorder: (items: OrderLineItem[]) => void;
 }
 
 export function AccountPage({
   lang,
   currentUser,
+  firebaseUser,
   onLogin,
   onRegister,
   onUpdateLocation,
   onLogout,
   onBackToMenu,
+  onReorder,
 }: AccountPageProps) {
   const t = COPY[lang];
   const [tab, setTab] = useState<'login' | 'register'>('login');
@@ -46,6 +53,29 @@ export function AccountPage({
   const [regAddress, setRegAddress] = useState('');
   const [regLocation, setRegLocation] = useState<GeoLocation | undefined>(undefined);
   const [formError, setFormError] = useState<string | null>(null);
+
+  const [pastOrders, setPastOrders] = useState<Order[]>([]);
+  const [loadingOrders, setLoadingOrders] = useState(false);
+
+  useEffect(() => {
+    const uid = currentUser?.id ?? firebaseUser?.uid;
+    if (!uid) {
+      setPastOrders([]);
+      return;
+    }
+    setLoadingOrders(true);
+    const unsub = subscribeCustomerOrders(
+      uid,
+      (orders) => {
+        setPastOrders(orders);
+        setLoadingOrders(false);
+      },
+      () => {
+        setLoadingOrders(false);
+      },
+    );
+    return () => unsub();
+  }, [currentUser?.id, firebaseUser?.uid]);
 
   const BackIcon = lang === 'ar' ? ArrowRight : ArrowLeft;
 
@@ -70,7 +100,7 @@ export function AccountPage({
   };
 
   return (
-    <div className="mx-auto max-w-xl px-4 pt-6 pb-20 sm:px-6">
+    <div className="mx-auto max-w-xl px-4 pt-6 pb-20 sm:px-6 space-y-5">
       <button
         type="button"
         onClick={onBackToMenu}
@@ -117,6 +147,51 @@ export function AccountPage({
               </a>
             ) : (
               <p className="text-xs font-medium text-[#546E61]">{t.noMapSaved}</p>
+            )}
+          </div>
+
+          {/* My Past Orders Section */}
+          <div className="rounded-2xl bg-[#EAE2D0] p-4 space-y-3">
+            <div className="flex items-center gap-2 text-sm font-extrabold text-[#1A3C2F]">
+              <Package className="h-4 w-4 text-[#9E7C16]" />
+              <span>{t.myOrdersTitle}</span>
+            </div>
+            {loadingOrders ? (
+              <p className="text-xs text-[#546E61] animate-pulse">...</p>
+            ) : pastOrders.length === 0 ? (
+              <p className="text-xs font-semibold text-[#546E61]">{t.noPastOrders}</p>
+            ) : (
+              <ul className="space-y-2.5 max-h-72 overflow-y-auto no-scrollbar">
+                {pastOrders.map((ord) => (
+                  <li
+                    key={ord.id}
+                    className="flex items-center justify-between gap-3 rounded-xl bg-white p-3 text-xs text-[#1A3C2F] shadow-xs"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-en font-extrabold text-[#1A3C2F]">{ord.orderNumber}</span>
+                        <span className="rounded-md bg-[#EAE2D0] px-2 py-0.5 text-[10px] font-extrabold text-[#8C6E10]">
+                          {ord.status}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-[11px] text-[#546E61] truncate">
+                        {ord.items.map((i) => `${i.quantity}x ${i.name}`).join(', ')}
+                      </p>
+                      <p className="mt-0.5 font-en font-bold text-[#1A3C2F]">
+                        {ord.total} {t.currency}
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => onReorder(ord.items)}
+                      className="palm-btn-gold min-h-[36px] rounded-lg px-3 py-1.5 text-xs font-extrabold shrink-0 cursor-pointer"
+                    >
+                      {t.reorderBtn}
+                    </button>
+                  </li>
+                ))}
+              </ul>
             )}
           </div>
 

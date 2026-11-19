@@ -137,6 +137,11 @@ export const COPY: Record<
     reportSendingBtn: string;
     reportSentMsg: string;
     footerNote: string;
+    myOrdersTitle: string;
+    reorderBtn: string;
+    noPastOrders: string;
+    enablePushBtn: string;
+    pushEnabledMsg: string;
   }
 > = {
   ar: {
@@ -274,6 +279,11 @@ export const COPY: Record<
     reportSendingBtn: 'جاري الإرسال...',
     reportSentMsg: 'تم إرسال التقرير إلى لوحة Palm Metric Admin بنجاح.',
     footerNote: 'بالم مترك · Palm Metric • Powered By Tashflow',
+    myOrdersTitle: 'طلباتي السابقة',
+    reorderBtn: 'إعادة الطلب',
+    noPastOrders: 'لا توجد طلبات سابقة بعد',
+    enablePushBtn: 'تفعيل إشعارات الفورية للطلب',
+    pushEnabledMsg: 'تم تفعيل إشعارات الطلب بنجاح',
   },
   en: {
     brandName: 'Palm Metric',
@@ -410,5 +420,10 @@ export const COPY: Record<
     reportSendingBtn: 'Sending...',
     reportSentMsg: 'Report sent to Palm Metric Admin successfully.',
     footerNote: 'Palm Metric • Powered By Tashflow',
+    myOrdersTitle: 'My Past Orders',
+    reorderBtn: 'Reorder',
+    noPastOrders: 'No past orders yet',
+    enablePushBtn: 'Enable Order Push Notifications',
+    pushEnabledMsg: 'Push notifications enabled successfully',
   },
 };

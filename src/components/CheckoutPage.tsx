@@ -33,6 +33,7 @@ import type {
   UserAccount,
 } from '../types';
 import { DeliveryMapPicker } from './GoogleMapsLocation';
+import { motion } from 'motion/react';
 
 interface CheckoutPageProps {
   lang: Language;
@@ -458,13 +459,19 @@ export function CheckoutPage({
           <div className="palm-card rounded-3xl p-5">
             <h2 className="text-base font-extrabold text-[#1A3C2F] mb-4">{t.itemsInOrder}</h2>
             <ul className="divide-y divide-[#1A3C2F]/10">
-              {cart.map((item) => {
+              {cart.map((item, index) => {
                 const title =
                   lang === 'ar'
                     ? item.nameAr || item.name
                     : item.nameEn || item.name;
                 return (
-                  <li key={item.cartKey} className="py-3.5 first:pt-0 last:pb-0 space-y-2">
+                  <motion.li
+                    key={item.cartKey}
+                    initial={{ opacity: 0, x: -16 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.25, delay: index * 0.04 }}
+                    className="py-3.5 first:pt-0 last:pb-0 space-y-2"
+                  >
                     <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0 flex-1">
                         <p className="text-sm sm:text-base font-extrabold text-[#1A3C2F]">
@@ -521,7 +528,7 @@ export function CheckoutPage({
                       placeholder={t.notesPlaceholder}
                       className="h-9 w-full rounded-lg border border-[#1A3C2F]/15 bg-white px-3 text-xs text-[#1A3C2F] focus:border-[#C9A227] focus:outline-none"
                     />
-                  </li>
+                  </motion.li>
                 );
               })}
             </ul>

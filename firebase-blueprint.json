@@ -2,74 +2,66 @@
   "entities": {
     "Billboard": {
       "title": "Billboard",
-      "description": "Promotional hero billboard, ad, offer banner, or looping video managed by Verda Admin.",
+      "description": "Promotional hero billboard, offer banner, or looping video managed by Palm Metric Admin.",
       "type": "object",
       "properties": {
         "title": { "type": "string", "maxLength": 200 },
         "titleAr": { "type": "string", "maxLength": 200 },
         "titleEn": { "type": "string", "maxLength": 200 },
-        "name": { "type": "string", "maxLength": 200 },
         "subtitle": { "type": "string", "maxLength": 400 },
         "subtitleAr": { "type": "string", "maxLength": 400 },
         "subtitleEn": { "type": "string", "maxLength": 400 },
-        "description": { "type": "string", "maxLength": 500 },
         "mediaUrl": { "type": "string", "maxLength": 700000 },
         "imageUrl": { "type": "string", "maxLength": 700000 },
-        "videoUrl": { "type": "string", "maxLength": 2048 },
-        "url": { "type": "string", "maxLength": 700000 },
+        "videoUrl": { "type": "string", "maxLength": 700000 },
+        "storagePath": { "type": "string", "maxLength": 512 },
         "mediaType": { "type": "string", "enum": ["image", "video"] },
-        "type": { "type": "string", "maxLength": 40 },
-        "posterUrl": { "type": "string", "maxLength": 700000 },
-        "active": { "type": "boolean" },
         "isActive": { "type": "boolean" },
-        "status": { "type": "string", "maxLength": 40 },
+        "active": { "type": "boolean" },
         "order": { "type": "number" },
-        "sortOrder": { "type": "number" },
-        "category": { "type": "string", "maxLength": 60 },
+        "category": { "type": "string", "maxLength": 80 },
         "ctaLabel": { "type": "string", "maxLength": 60 },
         "badge": { "type": "string", "maxLength": 60 },
-        "discount": { "type": "string", "maxLength": 60 },
-        "itemId": { "type": "string", "maxLength": 128 },
-        "itemIds": { "type": "array" },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
       }
     },
     "MenuItem": {
       "title": "MenuItem",
-      "description": "Specialty coffee, matcha, offer item, or food item controlled by Verda Admin.",
+      "description": "Specialty coffee, matcha, or pastry product managed by Palm Metric Admin.",
       "type": "object",
       "properties": {
         "name": { "type": "string", "maxLength": 140 },
         "nameAr": { "type": "string", "maxLength": 140 },
         "nameEn": { "type": "string", "maxLength": 140 },
-        "title": { "type": "string", "maxLength": 140 },
         "description": { "type": "string", "maxLength": 500 },
         "descriptionAr": { "type": "string", "maxLength": 500 },
         "price": { "type": "number" },
         "originalPrice": { "type": "number" },
-        "discountPrice": { "type": "number" },
-        "offerPrice": { "type": "number" },
         "isOffer": { "type": "boolean" },
         "offerLabel": { "type": "string", "maxLength": 60 },
         "category": { "type": "string", "maxLength": 80 },
-        "categoryId": { "type": "string", "maxLength": 80 },
         "categoryAr": { "type": "string", "maxLength": 80 },
         "imageUrl": { "type": "string", "maxLength": 700000 },
-        "photoUrl": { "type": "string", "maxLength": 700000 },
-        "image": { "type": "string", "maxLength": 700000 },
-        "photo": { "type": "string", "maxLength": 700000 },
-        "thumbnail": { "type": "string", "maxLength": 700000 },
-        "mediaUrl": { "type": "string", "maxLength": 700000 },
         "storagePath": { "type": "string", "maxLength": 512 },
-        "imagePath": { "type": "string", "maxLength": 512 },
         "inStock": { "type": "boolean" },
-        "available": { "type": "boolean" },
-        "isAvailable": { "type": "boolean" },
-        "outOfStock": { "type": "boolean" },
-        "status": { "type": "string", "maxLength": 40 },
-        "prepTime": { "type": "string", "maxLength": 40 },
         "supportsTemp": { "type": "boolean" },
+        "allowTemperature": { "type": "boolean" },
+        "allowMilkOption": { "type": "boolean" },
+        "coconutMilkPrice": { "type": "number" },
+        "origin": { "type": "string", "maxLength": 80 },
+        "originAr": { "type": "string", "maxLength": 80 },
+        "region": { "type": "string", "maxLength": 80 },
+        "regionAr": { "type": "string", "maxLength": 80 },
+        "processingMethod": { "type": "string", "maxLength": 80 },
+        "processingMethodAr": { "type": "string", "maxLength": 80 },
+        "roastLevel": { "type": "string", "maxLength": 60 },
+        "altitude": { "type": "string", "maxLength": 60 },
+        "variety": { "type": "string", "maxLength": 80 },
+        "tastingNotes": { "type": "array" },
+        "tastingNotesAr": { "type": "array" },
+        "brewMethods": { "type": "array" },
+        "producer": { "type": "string", "maxLength": 120 },
         "order": { "type": "number" },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
@@ -77,7 +69,7 @@
     },
     "Category": {
       "title": "Category",
-      "description": "Menu category managed by Verda Admin.",
+      "description": "Menu category managed by Palm Metric Admin.",
       "type": "object",
       "properties": {
         "name": { "type": "string", "maxLength": 80 },
@@ -87,27 +79,20 @@
         "active": { "type": "boolean" }
       }
     },
-    "StoreSettings": {
-      "title": "StoreSettings",
-      "description": "Global storefront controls managed by Verda Admin.",
+    "CoffeeOptionsSettings": {
+      "title": "CoffeeOptionsSettings",
+      "description": "Global fallback milk and hot/cold options stored at settings/coffeeOptions.",
       "type": "object",
       "properties": {
-        "storeOpen": { "type": "boolean" },
-        "isOpen": { "type": "boolean" },
-        "prepTime": { "type": "string", "maxLength": 40 },
-        "whatsappNumber": { "type": "string", "maxLength": 30 },
-        "announcement": { "type": "string", "maxLength": 300 },
-        "announcementAr": { "type": "string", "maxLength": 300 },
-        "heroTitle": { "type": "string", "maxLength": 140 },
-        "heroTitleAr": { "type": "string", "maxLength": 140 },
-        "heroSubtitle": { "type": "string", "maxLength": 300 },
-        "heroSubtitleAr": { "type": "string", "maxLength": 300 },
+        "milkSelectionEnabled": { "type": "boolean" },
+        "coconutMilkExtraPrice": { "type": "number" },
+        "hotColdSelectionEnabled": { "type": "boolean" },
         "updatedAt": { "type": "string", "format": "date-time" }
       }
     },
     "Order": {
       "title": "Order",
-      "description": "Customer order saved to Firestore and forwarded via WhatsApp.",
+      "description": "Canonical Pickup order created exclusively by createPalmMetricOrder Cloud Function (Admin SDK) and isolated by customerUid.",
       "type": "object",
       "properties": {
         "orderNumber": {
@@ -116,66 +101,89 @@
           "maxLength": 24,
           "pattern": "^[a-zA-Z0-9_-]+$"
         },
-        "orderType": { "type": "string", "enum": ["pickup", "delivery"] },
-        "customerName": { "type": "string", "minLength": 1, "maxLength": 100 },
-        "customerPhone": { "type": "string", "minLength": 4, "maxLength": 40 },
-        "deliveryLocation": { "type": "string", "maxLength": 300 },
-        "mapsLink": { "type": "string", "maxLength": 500 },
-        "orderNote": { "type": "string", "maxLength": 400 },
+        "customerUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "customerName": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "customerContact": { "type": "string", "minLength": 4, "maxLength": 80 },
         "items": { "type": "array" },
-        "itemCount": { "type": "number" },
-        "total": { "type": "number" },
+        "subtotal": { "type": "number" },
+        "totalBill": { "type": "number" },
+        "currency": { "type": "string", "enum": ["SAR"] },
+        "orderType": { "type": "string", "enum": ["pickup"] },
         "status": {
           "type": "string",
           "enum": ["Pending", "Preparing", "Ready", "Completed", "Cancelled"]
         },
-        "sourceApp": { "type": "string", "maxLength": 60 },
-        "lang": { "type": "string", "maxLength": 10 },
+        "notes": { "type": "string", "maxLength": 240 },
+        "sourceApp": { "type": "string", "maxLength": 64 },
+        "lang": { "type": "string", "enum": ["ar", "en"] },
+        "idempotencyKey": { "type": "string", "maxLength": 128 },
+        "pricingVersion": { "type": "number" },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["orderNumber", "customerName", "customerPhone", "items", "total", "status", "createdAt", "updatedAt"]
+      "required": ["orderNumber", "customerUid", "customerName", "customerContact", "items", "totalBill", "status", "createdAt", "updatedAt"]
+    },
+    "IdempotencyKey": {
+      "title": "IdempotencyKey",
+      "description": "Server-only transactional idempotency record preventing duplicate orders on retries.",
+      "type": "object",
+      "properties": {
+        "customerUid": { "type": "string", "maxLength": 128 },
+        "idempotencyKey": { "type": "string", "maxLength": 128 },
+        "requestDigest": { "type": "string", "maxLength": 128 },
+        "orderId": { "type": "string", "maxLength": 128 },
+        "orderNumber": { "type": "string", "maxLength": 24 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["customerUid", "idempotencyKey", "requestDigest", "orderId", "orderNumber", "createdAt"]
+    },
+    "ProductCustomization": {
+      "title": "ProductCustomization",
+      "description": "Admin-controlled per-product customization groups, options, selection rules, and SAR add-on prices.",
+      "type": "object",
+      "properties": {
+        "productId": { "type": "string", "maxLength": 128 },
+        "enabled": { "type": "boolean" },
+        "groups": { "type": "array" },
+        "schemaVersion": { "type": "number" },
+        "allowSpecialInstructions": { "type": "boolean" },
+        "updatedBy": { "type": "string", "maxLength": 200 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["productId", "enabled", "groups", "schemaVersion"]
     },
     "AppReport": {
       "title": "AppReport",
-      "description": "Activity, order, signup, or customer feedback report sent to Verda Admin.",
+      "description": "Customer feedback or issue report sent to Palm Metric Admin.",
       "type": "object",
       "properties": {
         "type": { "type": "string", "enum": ["order", "feedback", "customer_signup", "issue"] },
         "title": { "type": "string", "maxLength": 160 },
         "message": { "type": "string", "maxLength": 1000 },
-        "orderId": { "type": "string", "maxLength": 128 },
-        "orderNumber": { "type": "string", "maxLength": 40 },
-        "orderType": { "type": "string", "maxLength": 20 },
-        "customerName": { "type": "string", "maxLength": 100 },
-        "customerPhone": { "type": "string", "maxLength": 40 },
-        "deliveryLocation": { "type": "string", "maxLength": 300 },
-        "mapsLink": { "type": "string", "maxLength": 500 },
-        "itemCount": { "type": "number" },
-        "total": { "type": "number" },
+        "customerName": { "type": "string", "maxLength": 80 },
+        "customerPhone": { "type": "string", "maxLength": 80 },
         "status": { "type": "string", "enum": ["New", "Reviewed", "Resolved"] },
         "sourceApp": { "type": "string", "maxLength": 60 },
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["type", "title", "status", "createdAt"]
     },
-    "CustomerRecord": {
-      "title": "CustomerRecord",
-      "description": "Customer profile synced to Verda Admin on registration.",
+    "FcmToken": {
+      "title": "FcmToken",
+      "description": "Web push notification registration token owned by a customer session UID.",
       "type": "object",
       "properties": {
-        "name": { "type": "string", "maxLength": 100 },
-        "phone": { "type": "string", "maxLength": 40 },
-        "address": { "type": "string", "maxLength": 300 },
-        "mapsLink": { "type": "string", "maxLength": 500 },
-        "sourceApp": { "type": "string", "maxLength": 60 },
-        "createdAt": { "type": "string", "format": "date-time" }
+        "uid": { "type": "string", "maxLength": 128 },
+        "token": { "type": "string", "maxLength": 4096 },
+        "updatedAt": { "type": "string" },
+        "userAgent": { "type": "string", "maxLength": 512 }
       },
-      "required": ["name", "phone", "createdAt"]
+      "required": ["uid", "token", "updatedAt"]
     },
     "AdminUser": {
       "title": "AdminUser",
-      "description": "Authorized store administrator record.",
+      "description": "Verified store administrator record.",
       "type": "object",
       "properties": {
         "email": { "type": "string", "format": "email", "maxLength": 200 },
@@ -187,67 +195,39 @@
   "firestore": {
     "/billboards/{billboardId}": {
       "schema": { "$ref": "#/entities/Billboard" },
-      "description": "Active promotional hero banners and videos controlled by Verda Admin."
-    },
-    "/offers/{offerId}": {
-      "schema": { "$ref": "#/entities/Billboard" },
-      "description": "Active store offers and campaigns synced from Verda Admin."
-    },
-    "/banners/{bannerId}": {
-      "schema": { "$ref": "#/entities/Billboard" },
-      "description": "Promotional banners synced from Verda Admin."
-    },
-    "/promotions/{promoId}": {
-      "schema": { "$ref": "#/entities/Billboard" },
-      "description": "Promotions synced from Verda Admin."
-    },
-    "/ads/{adId}": {
-      "schema": { "$ref": "#/entities/Billboard" },
-      "description": "Advertisements synced from Verda Admin."
-    },
-    "/advertisements/{adId}": {
-      "schema": { "$ref": "#/entities/Billboard" },
-      "description": "Alternative advertisements collection synced from Verda Admin."
+      "description": "Active promotional hero banners and videos controlled by Palm Metric Admin."
     },
     "/menu/{itemId}": {
       "schema": { "$ref": "#/entities/MenuItem" },
-      "description": "Primary menu collection controlled by Verda Admin."
-    },
-    "/menuItems/{itemId}": {
-      "schema": { "$ref": "#/entities/MenuItem" },
-      "description": "Alternative menu items collection controlled by Verda Admin."
-    },
-    "/products/{productId}": {
-      "schema": { "$ref": "#/entities/MenuItem" },
-      "description": "Alternative products collection controlled by Verda Admin."
-    },
-    "/items/{itemId}": {
-      "schema": { "$ref": "#/entities/MenuItem" },
-      "description": "Alternative items collection controlled by Verda Admin."
+      "description": "Primary menu collection controlled by Palm Metric Admin."
     },
     "/categories/{categoryId}": {
       "schema": { "$ref": "#/entities/Category" },
-      "description": "Menu categories managed by Verda Admin."
+      "description": "Menu categories managed by Palm Metric Admin."
     },
     "/settings/{settingId}": {
-      "schema": { "$ref": "#/entities/StoreSettings" },
-      "description": "Global storefront configuration controlled by Verda Admin."
+      "schema": { "$ref": "#/entities/CoffeeOptionsSettings" },
+      "description": "Global coffeeOptions and store configuration controlled by Palm Metric Admin."
     },
-    "/storeConfig/{configId}": {
-      "schema": { "$ref": "#/entities/StoreSettings" },
-      "description": "Alternative store configuration controlled by Verda Admin."
+    "/productCustomizations/{productId}": {
+      "schema": { "$ref": "#/entities/ProductCustomization" },
+      "description": "Per-product customization groups and options managed strictly by verified admins."
     },
     "/orders/{orderId}": {
       "schema": { "$ref": "#/entities/Order" },
-      "description": "Customer orders reported to Verda Admin and tracked live."
+      "description": "Canonical Pickup orders created by Cloud Function Admin SDK and isolated by customerUid."
+    },
+    "/idempotencyKeys/{keyId}": {
+      "schema": { "$ref": "#/entities/IdempotencyKey" },
+      "description": "Server-only transactional idempotency records (no client read or write access)."
     },
     "/reports/{reportId}": {
       "schema": { "$ref": "#/entities/AppReport" },
-      "description": "All customer app reports (orders, signups, feedback) sent to Verda Admin."
+      "description": "Customer feedback and issue reports sent to Palm Metric Admin."
     },
-    "/customers/{customerId}": {
-      "schema": { "$ref": "#/entities/CustomerRecord" },
-      "description": "Registered customer profiles reported to Verda Admin."
+    "/fcmTokens/{tokenId}": {
+      "schema": { "$ref": "#/entities/FcmToken" },
+      "description": "Push notification registration tokens scoped to owner UID."
     },
     "/admins/{adminId}": {
       "schema": { "$ref": "#/entities/AdminUser" },

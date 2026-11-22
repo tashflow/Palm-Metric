@@ -10,6 +10,7 @@ import {
 import type { User as FirebaseUser } from 'firebase/auth';
 import { COPY } from '../data/i18n';
 import { subscribeCustomerOrders } from '../lib/firestoreSync';
+import { formatPrice, getOrderStatusLabel } from '../lib/format';
 import type { GeoLocation, Language, Order, OrderLineItem, UserAccount } from '../types';
 import { DeliveryMapPicker } from './GoogleMapsLocation';
 
@@ -58,9 +59,10 @@ export function AccountPage({
   const [loadingOrders, setLoadingOrders] = useState(false);
 
   useEffect(() => {
-    const uid = currentUser?.id ?? firebaseUser?.uid;
+    const uid = firebaseUser?.uid;
     if (!uid) {
       setPastOrders([]);
+      setLoadingOrders(false);
       return;
     }
     setLoadingOrders(true);
@@ -75,7 +77,7 @@ export function AccountPage({
       },
     );
     return () => unsub();
-  }, [currentUser?.id, firebaseUser?.uid]);
+  }, [firebaseUser?.uid]);
 
   const BackIcon = lang === 'ar' ? ArrowRight : ArrowLeft;
 
@@ -165,27 +167,27 @@ export function AccountPage({
                 {pastOrders.map((ord) => (
                   <li
                     key={ord.id}
-                    className="flex items-center justify-between gap-3 rounded-xl bg-white p-3 text-xs text-[#1A3C2F] shadow-xs"
+                    className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-3 rounded-xl bg-white p-3 text-xs text-[#1A3C2F] shadow-xs"
                   >
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <span className="font-en font-extrabold text-[#1A3C2F]">{ord.orderNumber}</span>
                         <span className="rounded-md bg-[#EAE2D0] px-2 py-0.5 text-[10px] font-extrabold text-[#8C6E10]">
-                          {ord.status}
+                          {getOrderStatusLabel(ord.status, lang)}
                         </span>
                       </div>
                       <p className="mt-1 text-[11px] text-[#546E61] truncate">
                         {ord.items.map((i) => `${i.quantity}x ${i.name}`).join(', ')}
                       </p>
-                      <p className="mt-0.5 font-en font-bold text-[#1A3C2F]">
-                        {ord.total} {t.currency}
+                      <p className="mt-0.5 font-en font-bold text-[#1A3C2F] tabular-nums">
+                        {formatPrice(ord.total)} {t.currency}
                       </p>
                     </div>
 
                     <button
                       type="button"
                       onClick={() => onReorder(ord.items)}
-                      className="palm-btn-gold min-h-[36px] rounded-lg px-3 py-1.5 text-xs font-extrabold shrink-0 cursor-pointer"
+                      className="palm-btn-gold min-h-[44px] rounded-xl px-3.5 py-2 text-xs font-extrabold shrink-0 cursor-pointer"
                     >
                       {t.reorderBtn}
                     </button>
@@ -250,6 +252,7 @@ export function AccountPage({
                   id="login-phone"
                   type="tel"
                   dir="ltr"
+                  autoComplete="tel"
                   value={loginPhone}
                   onChange={(e) => setLoginPhone(e.target.value)}
                   placeholder={t.phonePlaceholder}
@@ -264,6 +267,7 @@ export function AccountPage({
                 <input
                   id="login-pass"
                   type="password"
+                  autoComplete="current-password"
                   value={loginPassword}
                   onChange={(e) => setLoginPassword(e.target.value)}
                   placeholder={t.passwordPlaceholder}
@@ -293,6 +297,7 @@ export function AccountPage({
                 <input
                   id="reg-name"
                   type="text"
+                  autoComplete="name"
                   value={regName}
                   onChange={(e) => setRegName(e.target.value)}
                   placeholder={t.namePlaceholder}
@@ -308,6 +313,7 @@ export function AccountPage({
                   id="reg-phone"
                   type="tel"
                   dir="ltr"
+                  autoComplete="tel"
                   value={regPhone}
                   onChange={(e) => setRegPhone(e.target.value)}
                   placeholder={t.phonePlaceholder}
@@ -322,6 +328,7 @@ export function AccountPage({
                 <input
                   id="reg-pass"
                   type="password"
+                  autoComplete="new-password"
                   value={regPassword}
                   onChange={(e) => setRegPassword(e.target.value)}
                   placeholder={t.passwordPlaceholder}
@@ -336,6 +343,7 @@ export function AccountPage({
                 <input
                   id="reg-address"
                   type="text"
+                  autoComplete="street-address"
                   value={regAddress}
                   onChange={(e) => setRegAddress(e.target.value)}
                   placeholder={t.deliveryLocationPlaceholder}

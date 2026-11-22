@@ -1,9 +1,26 @@
 import { useEffect, useMemo, useState } from 'react';
-import { motion } from 'motion/react';
-import { Check, Clock, Copy, ExternalLink, MapPin, Minus, Plus, SlidersHorizontal, Sparkles, X } from 'lucide-react';
-import { BUSINESS } from '../data/menu';
+import { Check, Copy, ExternalLink, Info, Minus, Plus, RotateCcw, SearchX, SlidersHorizontal, Sparkles, X } from 'lucide-react';
 import { COPY } from '../data/i18n';
 import { activeProjectId } from '../lib/firebase';
+import { getCategoryArtwork } from '../lib/brandMedia';
+import { resolveItemSupportsTemperature } from '../lib/customization';
+import {
+  buildCartKey,
+  formatPrice,
+  getCategoryLabel,
+  getItemDescription,
+  getItemSecondaryTitle,
+  getItemTitle,
+} from '../lib/format';
+import {
+  extractAvailableFilterOptions,
+  filterAndSortMenuItems,
+  getMenuItemOrigin,
+  getMenuItemProcessing,
+  getMenuItemTastingNotes,
+  INITIAL_MENU_FILTERS,
+  type MenuFilterState,
+} from '../lib/menuFilter';
 import type {
   Billboard,
   CartItem,
@@ -13,7 +30,14 @@ import type {
   TempChoice,
 } from '../types';
 import { BillboardCarousel } from './BillboardCarousel';
+import {
+  BrandStorySection,
+  CategoriesSection,
+  FeaturedCoffeeSection,
+  HeroSection,
+} from './HomepageShowcase';
 import { StorageImage } from './MediaAsset';
+import { MenuDiscoveryBar } from './MenuDiscoveryBar';
 import {
   matchBillboardItems,
   SeasonalSpotlight,
@@ -64,11 +88,20 @@ export function MenuPage({
   isSignedIn,
 }: MenuPageProps) {
   const t = COPY[lang];
-  const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  const [filters, setFilters] = useState<MenuFilterState>(INITIAL_MENU_FILTERS);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [tempSelections, setTempSelections] = useState<Record<string, TempChoice>>({});
   const [mascotBounces, setMascotBounces] = useState(0);
   const [copiedRules, setCopiedRules] = useState(false);
   const [copiedDomain, setCopiedDomain] = useState(false);
+
+  const updateFilters = (patch: Partial<MenuFilterState>) => {
+    setFilters((prev) => ({ ...prev, ...patch }));
+  };
+
+  const clearAllFilters = () => {
+    setFilters(INITIAL_MENU_FILTERS);
+  };
 
   const currentHost = typeof window !== 'undefined' ? window.location.hostname : '';
 
@@ -101,6 +134,17 @@ service cloud.firestore {
     [items],
   );
 
+  const categoryArLookup = useMemo(() => {
+    const map = new Map<string, string>();
+    items.forEach((item) => {
+      const cat = item.category.trim();
+      if (cat && item.categoryAr && !map.has(cat.toLowerCase())) {
+        map.set(cat.toLowerCase(), item.categoryAr);
+      }
+    });
+    return map;
+  }, [items]);
+
   const categories = useMemo(() => {
     const unique = new Set<string>();
     items.forEach((item) => {
@@ -111,26 +155,56 @@ service cloud.firestore {
     return [...list, ...Array.from(unique)];
   }, [items, hasOffers]);
 
-  useEffect(() => {
-    if (
-      selectedCategory !== 'All' &&
-      !categories.some((c) => c.toLowerCase() === selectedCategory.toLowerCase())
-    ) {
-      setSelectedCategory('All');
-    }
-  }, [categories, selectedCategory]);
+  const filterOptions = useMemo(
+    () => extractAvailableFilterOptions(items, lang),
+    [items, lang],
+  );
 
-  const filteredItems = useMemo(() => {
-    if (selectedCategory === 'All') return items;
-    if (selectedCategory === '__offers__') {
-      return items.filter(
-        (item) => item.isOffer || (item.originalPrice && item.originalPrice > item.price),
-      );
-    }
-    return items.filter(
-      (item) => item.category.toLowerCase() === selectedCategory.toLowerCase(),
-    );
-  }, [items, selectedCategory]);
+  useEffect(() => {
+    setFilters((prev) => {
+      let changed = false;
+      const next = { ...prev };
+
+      if (
+        prev.category !== 'All' &&
+        !categories.some((c) => c.toLowerCase() === prev.category.toLowerCase())
+      ) {
+        next.category = 'All';
+        changed = true;
+      }
+
+      if (
+        prev.origin !== 'all' &&
+        !filterOptions.origins.some((opt) => opt.value === prev.origin)
+      ) {
+        next.origin = 'all';
+        changed = true;
+      }
+
+      if (
+        prev.processingMethod !== 'all' &&
+        !filterOptions.processingMethods.some((opt) => opt.value === prev.processingMethod)
+      ) {
+        next.processingMethod = 'all';
+        changed = true;
+      }
+
+      if (
+        prev.roastLevel !== 'all' &&
+        !filterOptions.roastLevels.some((opt) => opt.value === prev.roastLevel)
+      ) {
+        next.roastLevel = 'all';
+        changed = true;
+      }
+
+      return changed ? next : prev;
+    });
+  }, [categories, filterOptions]);
+
+  const filteredItems = useMemo(
+    () => filterAndSortMenuItems(items, filters, lang),
+    [items, filters, lang],
+  );
 
   const getTempForItem = (itemId: string): TempChoice => tempSelections[itemId] ?? 'hot';
 
@@ -138,10 +212,12 @@ service cloud.firestore {
     setTempSelections((prev) => ({ ...prev, [itemId]: temp }));
   };
 
+  const itemSupportsTemp = (item: MenuItem): boolean =>
+    resolveItemSupportsTemperature(item, [], storeSettings?.coffeeOptions);
+
   const getCartQuantity = (item: MenuItem): { cartKey: string; qty: number } => {
-    const temp = item.supportsTemp ? getTempForItem(item.id) : undefined;
-    const baseKey = temp ? `${item.id}::${temp}` : item.id;
-    const exactKey = `${baseKey}::`;
+    const temp = itemSupportsTemp(item) ? getTempForItem(item.id) : undefined;
+    const exactKey = buildCartKey(item.id, '', temp);
     const found = cart.find((c) => c.cartKey === exactKey);
     return { cartKey: exactKey, qty: found?.quantity ?? 0 };
   };
@@ -165,10 +241,55 @@ service cloud.firestore {
     return map;
   }, [spotlightEntries]);
 
-  const handleSelectBillboardCategory = (cat: string) => {
-    setSelectedCategory(cat);
-    const el = document.getElementById('palm-menu-tabs');
-    if (el) el.scrollIntoView({ behavior: 'smooth' });
+  const scrollToElement = (elementId: string) => {
+    const el = document.getElementById(elementId);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const featuredItems = useMemo(() => {
+    const available = items.filter((item) => item.inStock);
+    const source = available.length > 0 ? available : items;
+    if (source.length === 0) return [];
+
+    const picked: MenuItem[] = [];
+    const seenIds = new Set<string>();
+    const seenCategories = new Set<string>();
+
+    // Prioritize items with uploaded imagery & category diversity across the bar
+    const sorted = [...source].sort((a, b) => {
+      const aHasImg = a.imageUrl ? 1 : 0;
+      const bHasImg = b.imageUrl ? 1 : 0;
+      return bHasImg - aHasImg;
+    });
+
+    for (const item of sorted) {
+      const catKey = item.category.trim().toLowerCase();
+      if (!seenCategories.has(catKey)) {
+        seenCategories.add(catKey);
+        seenIds.add(item.id);
+        picked.push(item);
+        if (picked.length >= 6) break;
+      }
+    }
+
+    if (picked.length < 6) {
+      for (const item of sorted) {
+        if (!seenIds.has(item.id)) {
+          seenIds.add(item.id);
+          picked.push(item);
+          if (picked.length >= 6) break;
+        }
+      }
+    }
+
+    return picked;
+  }, [items]);
+
+  const handleSelectCategoryAndScroll = (cat: string) => {
+    const normalized = cat.trim().toLowerCase();
+    const matched = categories.find((c) => c.toLowerCase() === normalized);
+    updateFilters({ category: matched ?? 'All' });
+    scrollToElement('palm-menu-catalog');
   };
 
   const announcementText =
@@ -176,18 +297,8 @@ service cloud.firestore {
       ? storeSettings?.announcementAr || storeSettings?.announcement
       : storeSettings?.announcement || storeSettings?.announcementAr;
 
-  const customHeroGreeting =
-    lang === 'ar'
-      ? storeSettings?.heroTitleAr || storeSettings?.heroTitle
-      : storeSettings?.heroTitle || storeSettings?.heroTitleAr;
-
-  const customHeroSubtitle =
-    lang === 'ar'
-      ? storeSettings?.heroSubtitleAr || storeSettings?.heroSubtitle
-      : storeSettings?.heroSubtitle || storeSettings?.heroSubtitleAr;
-
   return (
-    <div className="mx-auto max-w-6xl px-4 pt-4 pb-32 sm:px-6 space-y-6">
+    <div className="mx-auto max-w-7xl px-3.5 pt-4 pb-32 sm:px-6 space-y-10 sm:space-y-14">
       {storeSettings && !storeSettings.storeOpen && (
         <div
           role="status"
@@ -198,116 +309,83 @@ service cloud.firestore {
       )}
 
       {announcementText && (
-        <div className="rounded-2xl border border-[#C9A227]/45 bg-[#132D23] px-4 py-2.5 text-center text-xs sm:text-sm font-bold text-[#F5F0E6]">
+        <div className="rounded-2xl border border-[#C9A227]/40 bg-[#132D23] px-4 py-2.5 text-center text-xs sm:text-sm font-bold text-[#F5F0E6]">
           {announcementText}
         </div>
       )}
 
-      {/* Top Promotional Billboard / Hero Slider from Firestore */}
+      {/* Storefront Hero + Customer Convenience Shortcuts */}
+      <HeroSection
+        lang={lang}
+        storeSettings={storeSettings}
+        mascotBounces={mascotBounces}
+        onMascotTap={() => setMascotBounces((n) => n + 1)}
+        onExploreCoffee={() => scrollToElement('palm-featured-coffee')}
+        onExploreStory={() => scrollToElement('palm-brand-story')}
+        onShortcutAllMenu={() => handleSelectCategoryAndScroll('All')}
+        onShortcutV60={() => handleSelectCategoryAndScroll('V60')}
+        onShortcutSeasonal={
+          spotlightEntries.length > 0
+            ? () => scrollToElement('palm-seasonal-spotlight')
+            : undefined
+        }
+        onOpenInfo={onOpenInfo}
+      />
+
+      {/* Firestore Billboards Carousel + Seasonal Spotlight */}
       <BillboardCarousel
         lang={lang}
         billboards={billboards}
         loading={billboardsLoading}
-        onSelectCategory={handleSelectBillboardCategory}
+        onSelectCategory={handleSelectCategoryAndScroll}
       />
 
-      {/* Brand Hero with Background-Free Animated Mascot */}
-      <section className="relative overflow-hidden rounded-3xl border border-[#C9A227]/30 bg-gradient-to-br from-[#143025] via-[#1A3C2F] to-[#112920] px-5 py-6 sm:px-10 sm:py-8 shadow-[0_20px_50px_-14px_rgba(4,14,10,0.65)]">
-        <svg
-          className="pointer-events-none absolute -end-10 -top-10 h-60 w-60 text-[#C9A227]/12"
-          viewBox="0 0 200 200"
-          fill="none"
-          aria-hidden="true"
-        >
-          <path d="M100 100 C100 45 55 15 10 15 L10 100 Z" stroke="currentColor" strokeWidth="2" />
-          <path d="M105 95 C140 50 175 45 190 55 C175 85 140 100 105 95 Z" stroke="currentColor" strokeWidth="2" />
-          <path d="M105 95 C105 40 125 10 140 15 C145 45 130 75 105 95 Z" stroke="currentColor" strokeWidth="2" />
-          <rect x="10" y="108" width="85" height="36" stroke="currentColor" strokeWidth="2" />
-          <rect x="108" y="108" width="82" height="82" stroke="currentColor" strokeWidth="2" />
-        </svg>
-
-        <div className="relative flex flex-col md:flex-row items-center justify-between gap-6 sm:gap-10">
-          <div className="relative flex items-center justify-center shrink-0 md:order-2">
-            <div
-              className="pointer-events-none absolute inset-0 scale-110 rounded-full bg-[radial-gradient(circle,rgba(201,162,39,0.24)_0%,rgba(245,240,230,0.06)_42%,rgba(26,60,47,0)_72%)]"
-              aria-hidden="true"
-            />
-            <motion.button
-              type="button"
-              onClick={() => setMascotBounces((n) => n + 1)}
-              aria-label="Palm Metric Mascot"
-              animate={{
-                scale: mascotBounces > 0 ? [1, 1.09, 0.96, 1] : 1,
-                rotate: mascotBounces > 0 ? [0, -6, 6, 0] : 0,
-              }}
-              transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.94 }}
-              className="relative cursor-pointer focus:outline-none"
-            >
-              <img
-                src={BUSINESS.mascotSrc}
-                alt="Palm Metric Mascot"
-                className="animate-mascot h-40 w-40 sm:h-52 sm:w-52 object-contain drop-shadow-[0_18px_26px_rgba(0,0,0,0.48)] select-none"
-              />
-            </motion.button>
-          </div>
-
-          <div className="text-center md:text-start md:order-1 max-w-xl">
-            <p className="text-xs sm:text-sm font-bold tracking-wide text-[#C9A227]">
-              {customHeroGreeting || t.heroGreeting}
-            </p>
-            <h1 className="mt-1.5 text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-[#F5F0E6] leading-tight">
-              {lang === 'ar' ? (
-                <>
-                  <span>{BUSINESS.nameAr}</span>
-                  <span className="mx-2.5 text-[#C9A227]">·</span>
-                  <span className="font-en text-2xl sm:text-3xl font-bold text-[#F5F0E6]/90">
-                    {BUSINESS.nameEn}
-                  </span>
-                </>
-              ) : (
-                <>
-                  <span className="font-en">{BUSINESS.nameEn}</span>
-                  <span className="mx-2.5 text-[#C9A227]">·</span>
-                  <span className="font-ar text-2xl sm:text-3xl font-bold text-[#F5F0E6]/90">
-                    {BUSINESS.nameAr}
-                  </span>
-                </>
-              )}
-            </h1>
-
-            <p className="mt-2.5 text-sm sm:text-base font-medium text-[#F5F0E6]/85 leading-relaxed">
-              {customHeroSubtitle || t.brandTagline}
-            </p>
-
-            <div className="mt-5 flex flex-wrap items-center justify-center md:justify-start gap-3">
-              <div className="inline-flex min-h-[42px] items-center gap-2 rounded-2xl border border-[#C9A227]/35 bg-[#132D23]/80 px-4 py-2 text-xs sm:text-sm font-bold text-[#F5F0E6]">
-                <Clock className="h-4 w-4 text-[#C9A227]" />
-                <span>{storeSettings?.prepTime || t.heroPrepBadge}</span>
-              </div>
-
-              <button
-                type="button"
-                onClick={onOpenInfo}
-                className="palm-btn-gold inline-flex min-h-[42px] items-center gap-2 rounded-2xl px-4 py-2 text-xs sm:text-sm font-extrabold cursor-pointer"
-              >
-                <MapPin className="h-4 w-4" />
-                <span>{t.heroVisitBtn}</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Seasonal Spotlight populated from active Firestore Billboards */}
       <SeasonalSpotlight
         lang={lang}
         entries={spotlightEntries}
         onQuickAdd={onQuickAdd}
         onSelectItem={onSelectItem}
-        onExploreCategory={handleSelectBillboardCategory}
+        onExploreCategory={handleSelectCategoryAndScroll}
       />
+
+      {/* Featured Coffee Showcase */}
+      <FeaturedCoffeeSection
+        lang={lang}
+        featuredItems={featuredItems}
+        loading={menuLoading}
+        coffeeOptions={storeSettings?.coffeeOptions}
+        getTempForItem={getTempForItem}
+        onSetTemp={setTempForItem}
+        getCartQuantity={getCartQuantity}
+        onQuickAdd={onQuickAdd}
+        onUpdateQty={onUpdateQty}
+        onSelectItem={onSelectItem}
+      />
+
+      {/* Seven Palm Metric Categories Grid */}
+      <CategoriesSection
+        lang={lang}
+        items={items}
+        selectedCategory={filters.category}
+        onSelectCategory={handleSelectCategoryAndScroll}
+      />
+
+      {/* Complete Interactive Menu Catalog */}
+      <section id="palm-menu-catalog" aria-labelledby="palm-full-menu-heading" className="space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2 border-b border-[#C9A227]/20 pb-4">
+          <div>
+            <p className="text-xs font-bold tracking-wide text-[#C9A227]">{t.brandName}</p>
+            <h2
+              id="palm-full-menu-heading"
+              className="font-editorial mt-1 text-2xl sm:text-3xl font-bold tracking-tight text-[#F5F0E6] [text-wrap:balance]"
+            >
+              {t.fullMenuTitle}
+            </h2>
+          </div>
+          <p className="text-xs sm:text-sm font-medium text-[#F5F0E6]/78 max-w-md leading-relaxed">
+            {t.fullMenuSubtitle}
+          </p>
+        </div>
 
       {/* Category Filter Tabs */}
       <div
@@ -317,25 +395,46 @@ service cloud.firestore {
         className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1"
       >
         {categories.map((cat) => {
-          const active = selectedCategory.toLowerCase() === cat.toLowerCase();
+          const active = filters.category.toLowerCase() === cat.toLowerCase();
+          const catLabel =
+            cat === 'All'
+              ? t.allCategories
+              : cat === '__offers__'
+                ? t.offersTab
+                : getCategoryLabel(cat, lang, categoryArLookup.get(cat.toLowerCase()));
           return (
             <button
               key={cat}
               type="button"
               role="tab"
               aria-selected={active}
-              onClick={() => setSelectedCategory(cat)}
-              className={`min-h-[40px] rounded-xl px-3.5 py-1.5 text-xs sm:text-sm font-bold whitespace-nowrap shrink-0 cursor-pointer transition-all ${
+              onClick={() => updateFilters({ category: cat })}
+              className={`min-h-[44px] rounded-xl px-3.5 py-2 text-xs sm:text-sm font-bold whitespace-nowrap shrink-0 cursor-pointer transition-all ${
                 active
                   ? 'palm-btn-gold'
                   : 'bg-[#132D23] text-[#F5F0E6] border border-[#C9A227]/25 hover:border-[#C9A227]/65'
               }`}
             >
-              {cat === 'All' ? t.allCategories : cat === '__offers__' ? t.offersTab : cat}
+              {catLabel}
             </button>
           );
         })}
       </div>
+
+      {/* Smart Search, Attribute Filters & Sorting Bar */}
+      {!menuLoading && items.length > 0 && (
+        <MenuDiscoveryBar
+          lang={lang}
+          filters={filters}
+          options={filterOptions}
+          totalCount={items.length}
+          filteredCount={filteredItems.length}
+          filtersOpen={filtersOpen}
+          onToggleFiltersOpen={() => setFiltersOpen((open) => !open)}
+          onChange={updateFilters}
+          onClearAll={clearAllFilters}
+        />
+      )}
 
       {authError && (
         <div className="palm-card rounded-3xl p-5 sm:p-6 space-y-3 border-2 border-[#C9A227]">
@@ -504,20 +603,39 @@ service cloud.firestore {
             ) : null}
           </div>
         </div>
+      ) : filteredItems.length === 0 ? (
+        <div className="palm-card rounded-3xl p-8 sm:p-12 text-center">
+          <SearchX className="mx-auto h-9 w-9 text-[#9E7C16]" />
+          <h3 className="mt-4 text-lg sm:text-xl font-extrabold text-[#1A3C2F]">
+            {t.emptySearchTitle}
+          </h3>
+          <p className="mx-auto mt-2 max-w-md text-xs sm:text-sm font-medium text-[#4A6457] leading-relaxed">
+            {t.emptySearchDesc}
+          </p>
+          <div className="mt-6 flex justify-center">
+            <button
+              type="button"
+              onClick={clearAllFilters}
+              className="palm-btn-gold inline-flex min-h-[44px] items-center gap-2 rounded-xl px-5 py-2.5 text-xs sm:text-sm font-extrabold cursor-pointer"
+            >
+              <RotateCcw className="h-4 w-4" />
+              <span>{t.clearAllFiltersBtn}</span>
+            </button>
+          </div>
+        </div>
       ) : (
         <div className="grid grid-cols-1 gap-2.5 lg:grid-cols-2 lg:gap-3">
           {filteredItems.map((item) => {
             const outOfStock = !item.inStock;
-            const currentTemp = item.supportsTemp ? getTempForItem(item.id) : undefined;
+            const showsTemp = itemSupportsTemp(item);
+            const currentTemp = showsTemp ? getTempForItem(item.id) : undefined;
             const { cartKey, qty } = getCartQuantity(item);
-            const primaryName =
-              lang === 'ar' ? item.nameAr || item.name : item.nameEn || item.name;
-            const secondaryName =
-              lang === 'ar'
-                ? item.nameEn || (item.nameAr ? item.name : '')
-                : item.nameAr || '';
-            const descriptionText =
-              lang === 'ar' ? item.descriptionAr || item.description : item.description;
+            const primaryName = getItemTitle(item, lang);
+            const secondaryName = getItemSecondaryTitle(item, lang);
+            const descriptionText = getItemDescription(item, lang);
+            const originText = getMenuItemOrigin(item, lang);
+            const processingText = getMenuItemProcessing(item, lang);
+            const tastingNotes = getMenuItemTastingNotes(item, lang);
 
             const spotlightBillboard = spotlightItemMap.get(item.id);
             const isSpotlighted = Boolean(spotlightBillboard);
@@ -527,167 +645,176 @@ service cloud.firestore {
             return (
               <article
                 key={item.id}
-                className={`palm-list-card flex items-center gap-2.5 sm:gap-3 rounded-2xl p-2.5 sm:p-3 ${
+                className={`palm-list-card flex flex-col sm:flex-row sm:items-center gap-3 rounded-2xl p-3 sm:p-3.5 ${
                   isSpotlighted
                     ? '!border-2 !border-[#C9A227] !shadow-[inset_0_1px_0_rgba(255,255,255,0.85),0_4px_0_#A6831B,0_12px_22px_-8px_rgba(201,162,39,0.28)]'
                     : ''
-                } ${outOfStock ? 'opacity-60' : 'palm-list-card-interactive'}`}
+                } ${outOfStock ? 'opacity-65' : 'palm-list-card-interactive'}`}
               >
-                <button
-                  type="button"
-                  disabled={outOfStock}
-                  onClick={() => onSelectItem(item)}
-                  aria-label={primaryName}
-                  className={`block h-[72px] w-[72px] sm:h-20 sm:w-20 shrink-0 overflow-hidden rounded-xl text-left ${
-                    outOfStock ? 'cursor-not-allowed' : 'cursor-pointer'
-                  }`}
-                >
-                  <StorageImage
-                    src={item.imageUrl}
-                    alt={primaryName}
-                    fallbackLabel={primaryName}
-                    disabled={outOfStock}
-                    className="h-full w-full"
-                  />
-                </button>
-
-                <div className="min-w-0 flex-1 flex flex-col justify-center gap-0.5">
-                  <div className="flex items-center gap-1.5 text-[11px] font-bold text-[#6E603A] truncate">
-                    {spotlightBillboard && (
-                      <>
-                        <span className="text-[#947210] font-extrabold shrink-0">
-                          {t.seasonalKicker}
-                        </span>
-                        <span aria-hidden="true">·</span>
-                      </>
-                    )}
-                    <span className="truncate">
-                      {lang === 'ar' && item.categoryAr ? item.categoryAr : item.category}
-                    </span>
-                    {isOffer && (
-                      <>
-                        <span aria-hidden="true">·</span>
-                        <span className="text-[#7D5E08] font-extrabold shrink-0">
-                          {item.offerLabel || t.specialOfferBadge}
-                        </span>
-                      </>
-                    )}
-                    {outOfStock && (
-                      <>
-                        <span aria-hidden="true">·</span>
-                        <span className="text-[#912018] shrink-0">{t.outOfStockLabel}</span>
-                      </>
-                    )}
-                  </div>
-
+                <div className="flex items-start sm:items-center gap-3 min-w-0 flex-1">
                   <button
                     type="button"
-                    disabled={outOfStock}
                     onClick={() => onSelectItem(item)}
-                    className={`min-w-0 text-start ${
-                      outOfStock ? 'cursor-not-allowed' : 'cursor-pointer'
-                    }`}
+                    aria-label={primaryName}
+                    className="block h-[76px] w-[76px] sm:h-20 sm:w-20 shrink-0 overflow-hidden rounded-xl text-start cursor-pointer"
                   >
-                    <h3 className="truncate text-sm sm:text-[15px] font-extrabold leading-tight text-[#1A3C2F]">
-                      {primaryName}
-                    </h3>
-                    {secondaryName && secondaryName !== primaryName && (
-                      <p className="truncate text-[11px] font-semibold text-[#546E61] leading-snug">
-                        {secondaryName}
-                      </p>
-                    )}
+                    <StorageImage
+                      src={item.imageUrl || getCategoryArtwork(item.category)}
+                      alt={primaryName}
+                      fallbackLabel={primaryName}
+                      disabled={outOfStock}
+                      className="h-full w-full"
+                    />
                   </button>
 
-                  {descriptionText && (
-                    <p className="line-clamp-1 text-[11px] text-[#4A6457] leading-snug">
-                      {descriptionText}
-                    </p>
-                  )}
-
-                  <div className="mt-0.5 flex flex-wrap items-center gap-2">
-                    <span className="inline-flex items-baseline gap-1.5 text-xs sm:text-sm font-extrabold text-[#1A3C2F] tabular-nums">
-                      <span>
-                        {item.price} {t.currency}
-                      </span>
-                      {hasDiscount && (
-                        <span className="text-[11px] font-bold text-[#756C59] line-through">
-                          {item.originalPrice} {t.currency}
-                        </span>
+                  <div className="min-w-0 flex-1 flex flex-col justify-center gap-0.5">
+                    <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] font-bold text-[#6E603A]">
+                      {spotlightBillboard && (
+                        <>
+                          <span className="text-[#947210] font-extrabold shrink-0">
+                            {t.seasonalKicker}
+                          </span>
+                          <span aria-hidden="true">·</span>
+                        </>
                       )}
-                    </span>
+                      <span className="truncate">
+                        {getCategoryLabel(item.category, lang, item.categoryAr)}
+                      </span>
+                      {originText && (
+                        <>
+                          <span aria-hidden="true">·</span>
+                          <span className="text-[#1A3C2F] shrink-0">{originText}</span>
+                        </>
+                      )}
+                      {processingText && (
+                        <>
+                          <span aria-hidden="true">·</span>
+                          <span className="text-[#3B594B] shrink-0">{processingText}</span>
+                        </>
+                      )}
+                      {isOffer && (
+                        <>
+                          <span aria-hidden="true">·</span>
+                          <span className="text-[#7D5E08] font-extrabold shrink-0">
+                            {item.offerLabel || t.specialOfferBadge}
+                          </span>
+                        </>
+                      )}
+                      <span aria-hidden="true">·</span>
+                      <span className={outOfStock ? 'text-[#912018] shrink-0' : 'text-[#2D6249] shrink-0'}>
+                        {outOfStock ? t.outOfStockLabel : t.inStockLabel}
+                      </span>
+                    </div>
 
-                    {item.supportsTemp && !outOfStock && (
-                      <div className="inline-flex items-center gap-1 rounded-lg bg-[#E6DEC8] p-0.5">
-                        <button
-                          type="button"
-                          onClick={() => setTempForItem(item.id, 'hot')}
-                          className={`min-h-[26px] rounded-md px-2 text-[11px] font-bold cursor-pointer transition-colors ${
-                            currentTemp === 'hot'
-                              ? 'bg-[#1A3C2F] text-[#C9A227]'
-                              : 'text-[#3B594B] hover:text-[#1A3C2F]'
-                          }`}
-                        >
-                          {t.hotLabel}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setTempForItem(item.id, 'cold')}
-                          className={`min-h-[26px] rounded-md px-2 text-[11px] font-bold cursor-pointer transition-colors ${
-                            currentTemp === 'cold'
-                              ? 'bg-[#1A3C2F] text-[#C9A227]'
-                              : 'text-[#3B594B] hover:text-[#1A3C2F]'
-                          }`}
-                        >
-                          {t.coldLabel}
-                        </button>
-                      </div>
-                    )}
+                    <button
+                      type="button"
+                      onClick={() => onSelectItem(item)}
+                      className="min-w-0 text-start cursor-pointer"
+                    >
+                      <h3 className="truncate text-sm sm:text-[15px] font-extrabold leading-tight text-[#1A3C2F]">
+                        {primaryName}
+                      </h3>
+                      {secondaryName && secondaryName !== primaryName && (
+                        <p className="truncate text-[11px] font-semibold text-[#546E61] leading-snug">
+                          {secondaryName}
+                        </p>
+                      )}
+                    </button>
+
+                    {tastingNotes.length > 0 ? (
+                      <p className="line-clamp-1 text-[11px] font-semibold text-[#3B594B] leading-snug">
+                        {tastingNotes.join(' · ')}
+                      </p>
+                    ) : descriptionText ? (
+                      <p className="line-clamp-1 text-[11px] text-[#4A6457] leading-snug">
+                        {descriptionText}
+                      </p>
+                    ) : null}
+
+                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                      <span className="inline-flex items-baseline gap-1.5 text-xs sm:text-sm font-extrabold text-[#1A3C2F] tabular-nums">
+                        <span>
+                          {formatPrice(item.price)} {t.currency}
+                        </span>
+                        {hasDiscount && item.originalPrice !== undefined && (
+                          <span className="text-[11px] font-bold text-[#756C59] line-through">
+                            {formatPrice(item.originalPrice)} {t.currency}
+                          </span>
+                        )}
+                      </span>
+
+                      {showsTemp && !outOfStock && (
+                        <div className="inline-flex items-center gap-1 rounded-lg bg-[#E6DEC8] p-0.5">
+                          <button
+                            type="button"
+                            onClick={() => setTempForItem(item.id, 'hot')}
+                            className={`min-h-[34px] rounded-md px-2.5 text-[11px] font-bold cursor-pointer transition-colors ${
+                              currentTemp === 'hot'
+                                ? 'bg-[#1A3C2F] text-[#C9A227]'
+                                : 'text-[#3B594B] hover:text-[#1A3C2F]'
+                            }`}
+                          >
+                            {t.hotLabel}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setTempForItem(item.id, 'cold')}
+                            className={`min-h-[34px] rounded-md px-2.5 text-[11px] font-bold cursor-pointer transition-colors ${
+                              currentTemp === 'cold'
+                                ? 'bg-[#1A3C2F] text-[#C9A227]'
+                                : 'text-[#3B594B] hover:text-[#1A3C2F]'
+                            }`}
+                          >
+                            {t.coldLabel}
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
 
-                <div className="shrink-0 flex items-center gap-1.5">
+                <div className="shrink-0 flex items-center justify-end gap-2 border-t border-[#1A3C2F]/10 pt-2.5 sm:border-t-0 sm:pt-0">
+                  <button
+                    type="button"
+                    onClick={() => onSelectItem(item)}
+                    aria-label={`${t.viewDetailsBtn}: ${primaryName}`}
+                    className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl bg-[#E6DEC8] px-3 text-xs font-bold text-[#1A3C2F] hover:bg-[#DBD1B6] whitespace-nowrap cursor-pointer shrink-0"
+                  >
+                    <Info className="h-3.5 w-3.5 shrink-0" />
+                    <span>{t.viewDetailsBtn}</span>
+                  </button>
+
                   {outOfStock ? (
-                    <span className="rounded-xl bg-[#DFD7C4] px-2.5 py-2 text-[11px] font-extrabold text-[#6E6758] whitespace-nowrap">
+                    <span className="inline-flex min-h-[44px] items-center rounded-xl bg-[#DFD7C4] px-3 text-xs font-extrabold text-[#6E6758] whitespace-nowrap">
                       {t.unavailableBtn}
                     </span>
                   ) : qty === 0 ? (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => onSelectItem(item)}
-                        aria-label={`${t.customizeBtn}: ${primaryName}`}
-                        title={t.customizeBtn}
-                        className="hidden sm:flex h-10 w-10 items-center justify-center rounded-xl bg-[#E6DEC8] text-[#1A3C2F] hover:bg-[#DBD1B6] cursor-pointer shrink-0"
-                      >
-                        <SlidersHorizontal className="h-3.5 w-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onQuickAdd(item, currentTemp)}
-                        className="palm-btn-gold h-10 rounded-xl px-3 sm:px-3.5 text-xs font-extrabold flex items-center justify-center gap-1 whitespace-nowrap shrink-0 cursor-pointer"
-                      >
-                        <Plus className="h-3.5 w-3.5 stroke-[2.5]" />
-                        <span>{t.addBtn}</span>
-                      </button>
-                    </>
+                    <button
+                      type="button"
+                      onClick={() => onQuickAdd(item, currentTemp)}
+                      className="palm-btn-gold h-11 rounded-xl px-3.5 text-xs font-extrabold flex items-center justify-center gap-1 whitespace-nowrap shrink-0 cursor-pointer"
+                    >
+                      <Plus className="h-3.5 w-3.5 stroke-[2.5]" />
+                      <span>{t.addBtn}</span>
+                    </button>
                   ) : (
-                    <div className="flex h-10 items-center gap-1 rounded-xl bg-[#1A3C2F] px-1 text-[#F5F0E6] shadow-[0_3px_0_#0D2119]">
+                    <div className="flex h-11 items-center gap-1 rounded-xl bg-[#1A3C2F] px-1 text-[#F5F0E6] shadow-[0_3px_0_#0D2119]">
                       <button
                         type="button"
                         onClick={() => onUpdateQty(cartKey, -1)}
                         aria-label="Decrease quantity"
-                        className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#254E3E] text-[#F5F0E6] hover:bg-[#2E614D] cursor-pointer"
+                        className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#254E3E] text-[#F5F0E6] hover:bg-[#2E614D] cursor-pointer"
                       >
                         <Minus className="h-3.5 w-3.5" />
                       </button>
-                      <span className="min-w-[18px] text-center font-en text-xs font-extrabold tabular-nums text-[#C9A227]">
+                      <span className="min-w-[20px] text-center font-en text-xs font-extrabold tabular-nums text-[#C9A227]">
                         {qty}
                       </span>
                       <button
                         type="button"
                         onClick={() => onUpdateQty(cartKey, 1)}
                         aria-label="Increase quantity"
-                        className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#C9A227] text-[#142A20] hover:bg-[#D4AE34] cursor-pointer"
+                        className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#C9A227] text-[#142A20] hover:bg-[#D4AE34] cursor-pointer"
                       >
                         <Plus className="h-3.5 w-3.5 stroke-[2.5]" />
                       </button>
@@ -699,6 +826,10 @@ service cloud.firestore {
           })}
         </div>
       )}
+      </section>
+
+      {/* Editorial Brand Story Section */}
+      <BrandStorySection lang={lang} onOpenInfo={onOpenInfo} />
     </div>
   );
 }

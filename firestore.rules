@@ -24,23 +24,44 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isAdmin() {
+    // Query-safe verified admin check (no DB reads inside list rules).
+    // Strictly forbids anonymous providers and unverified emails.
+    function isVerifiedAdminToken() {
       return isSignedIn()
-        && request.auth.token.email_verified == true
+        && request.auth.token.firebase.sign_in_provider != 'anonymous'
         && (
-          request.auth.token.email == 'tashfilartwork@gmail.com'
-          || exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+          (
+            request.auth.token.email_verified == true
+            && request.auth.token.email in [
+              'palmmetric1@gmail.com',
+              'palmmatric1@gmail.com',
+              'tashfilartwork@gmail.com',
+              'tashflow26@gmail.com'
+            ]
+          )
+          || request.auth.uid in ['39H76y4E55g5yX2uY0lE5bQ3a393']
+        );
+    }
+
+    // Full admin verification for single-doc reads and writes.
+    function isAdmin() {
+      return isVerifiedAdminToken()
+        || (
+          isSignedIn()
+          && request.auth.token.email_verified == true
+          && request.auth.token.firebase.sign_in_provider != 'anonymous'
+          && exists(/databases/$(database)/documents/admins/$(request.auth.uid))
         );
     }
 
     // Billboard, Ad & Offer validation blueprint
     function isValidBillboard(data) {
-      return data.keys().size() >= 1 && data.keys().size() <= 40
+      return data.keys().size() >= 1 && data.keys().size() <= 45
         && data.keys().hasOnly([
           'title', 'titleAr', 'titleEn', 'name', 'nameAr', 'nameEn', 'headline',
           'subtitle', 'subtitleAr', 'subtitleEn', 'description', 'descriptionAr',
           'mediaUrl', 'imageUrl', 'videoUrl', 'posterUrl', 'url', 'image', 'video', 'bannerUrl', 'fileUrl',
-          'mediaType', 'type',
+          'storagePath', 'mediaAssetId', 'mediaType', 'type',
           'active', 'isActive', 'status',
           'order', 'sortOrder',
           'category', 'ctaLabel', 'badge', 'discount', 'discountPercent',
@@ -68,6 +89,8 @@ service cloud.firestore {
         && (!('video' in data) || (data.video is string && data.video.size() <= 700000))
         && (!('bannerUrl' in data) || (data.bannerUrl is string && data.bannerUrl.size() <= 700000))
         && (!('fileUrl' in data) || (data.fileUrl is string && data.fileUrl.size() <= 700000))
+        && (!('storagePath' in data) || (data.storagePath is string && data.storagePath.size() <= 512))
+        && (!('mediaAssetId' in data) || (data.mediaAssetId is string && data.mediaAssetId.size() <= 128))
         && (!('mediaType' in data) || (data.mediaType is string && data.mediaType.size() <= 40))
         && (!('type' in data) || (data.type is string && data.type.size() <= 40))
         && (!('active' in data) || data.active is bool)
@@ -92,16 +115,20 @@ service cloud.firestore {
 
     // Menu & Offer item validation blueprint
     function isValidMenuItem(data) {
-      return data.keys().size() >= 2 && data.keys().size() <= 45
+      return data.keys().size() >= 2 && data.keys().size() <= 60
         && data.keys().hasOnly([
           'name', 'nameAr', 'nameEn', 'title', 'titleAr', 'titleEn',
           'description', 'descriptionAr', 'descriptionEn',
           'price', 'originalPrice', 'discountPrice', 'offerPrice',
           'isOffer', 'offerLabel', 'offerLabelAr', 'badge',
           'category', 'categoryId', 'categoryAr', 'categoryEn', 'categoryName',
-          'imageUrl', 'photoUrl', 'image', 'imgUrl', 'url', 'photo', 'thumbnail', 'picture', 'mediaUrl', 'image_url', 'photo_url', 'storagePath', 'imagePath',
+          'imageUrl', 'photoUrl', 'image', 'imgUrl', 'url', 'photo', 'thumbnail', 'picture', 'mediaUrl', 'image_url', 'photo_url', 'storagePath', 'imagePath', 'mediaAssetId',
           'inStock', 'isAvailable', 'available', 'outOfStock', 'stockStatus', 'status',
           'prepTime', 'supportsTemp', 'hasTempOption',
+          'allowMilkOption', 'coconutMilkPrice', 'allowTemperature',
+          'origin', 'originAr', 'region', 'regionAr', 'country', 'countryAr',
+          'processingMethod', 'processingMethodAr', 'roastLevel', 'altitude', 'variety',
+          'tastingNotes', 'tastingNotesAr', 'brewMethods', 'producer',
           'order', 'sortOrder', 'featured',
           'createdAt', 'updatedAt'
         ])
@@ -140,6 +167,7 @@ service cloud.firestore {
         && (!('photo_url' in data) || (data.photo_url is string && data.photo_url.size() <= 700000))
         && (!('storagePath' in data) || (data.storagePath is string && data.storagePath.size() <= 512))
         && (!('imagePath' in data) || (data.imagePath is string && data.imagePath.size() <= 512))
+        && (!('mediaAssetId' in data) || (data.mediaAssetId is string && data.mediaAssetId.size() <= 128))
         && (!('inStock' in data) || data.inStock is bool)
         && (!('isAvailable' in data) || data.isAvailable is bool)
         && (!('available' in data) || data.available is bool)
@@ -149,6 +177,24 @@ service cloud.firestore {
         && (!('prepTime' in data) || (data.prepTime is string && data.prepTime.size() <= 40))
         && (!('supportsTemp' in data) || data.supportsTemp is bool)
         && (!('hasTempOption' in data) || data.hasTempOption is bool)
+        && (!('allowMilkOption' in data) || data.allowMilkOption is bool)
+        && (!('coconutMilkPrice' in data) || (data.coconutMilkPrice is number && data.coconutMilkPrice >= 0 && data.coconutMilkPrice <= 500))
+        && (!('allowTemperature' in data) || data.allowTemperature is bool)
+        && (!('origin' in data) || (data.origin is string && data.origin.size() <= 80))
+        && (!('originAr' in data) || (data.originAr is string && data.originAr.size() <= 80))
+        && (!('region' in data) || (data.region is string && data.region.size() <= 80))
+        && (!('regionAr' in data) || (data.regionAr is string && data.regionAr.size() <= 80))
+        && (!('country' in data) || (data.country is string && data.country.size() <= 80))
+        && (!('countryAr' in data) || (data.countryAr is string && data.countryAr.size() <= 80))
+        && (!('processingMethod' in data) || (data.processingMethod is string && data.processingMethod.size() <= 80))
+        && (!('processingMethodAr' in data) || (data.processingMethodAr is string && data.processingMethodAr.size() <= 80))
+        && (!('roastLevel' in data) || (data.roastLevel is string && data.roastLevel.size() <= 60))
+        && (!('altitude' in data) || (data.altitude is string && data.altitude.size() <= 60))
+        && (!('variety' in data) || (data.variety is string && data.variety.size() <= 80))
+        && (!('tastingNotes' in data) || (data.tastingNotes is list && data.tastingNotes.size() <= 12 && (data.tastingNotes.size() == 0 || data.tastingNotes[0] is string)))
+        && (!('tastingNotesAr' in data) || (data.tastingNotesAr is list && data.tastingNotesAr.size() <= 12 && (data.tastingNotesAr.size() == 0 || data.tastingNotesAr[0] is string)))
+        && (!('brewMethods' in data) || (data.brewMethods is list && data.brewMethods.size() <= 12 && (data.brewMethods.size() == 0 || data.brewMethods[0] is string)))
+        && (!('producer' in data) || (data.producer is string && data.producer.size() <= 120))
         && (!('order' in data) || data.order is number)
         && (!('sortOrder' in data) || data.sortOrder is number)
         && (!('featured' in data) || data.featured is bool)
@@ -170,12 +216,55 @@ service cloud.firestore {
         && (!('updatedAt' in data) || data.updatedAt is timestamp);
     }
 
+    function isValidProductCustomization(data, productId) {
+      return data.keys().hasAll(['productId', 'enabled', 'groups', 'schemaVersion'])
+        && data.keys().hasOnly([
+          'productId', 'enabled', 'groups', 'schemaVersion',
+          'allowSpecialInstructions', 'updatedAt', 'updatedBy', 'createdAt'
+        ])
+        && data.productId is string && data.productId == productId
+        && data.enabled is bool
+        && data.schemaVersion is number && data.schemaVersion >= 1 && data.schemaVersion <= 100
+        && data.groups is list && data.groups.size() <= 20
+        && (data.groups.size() == 0 || (
+          data.groups[0] is map
+          && data.groups[0].keys().hasAll(['id', 'name', 'type', 'required', 'minSelections', 'maxSelections', 'displayOrder', 'enabled', 'options'])
+          && data.groups[0].keys().hasOnly(['id', 'name', 'nameAr', 'type', 'required', 'minSelections', 'maxSelections', 'displayOrder', 'enabled', 'options'])
+          && data.groups[0].id is string && data.groups[0].id.size() >= 1 && data.groups[0].id.size() <= 80
+          && data.groups[0].name is string && data.groups[0].name.size() <= 120
+          && (!('nameAr' in data.groups[0]) || (data.groups[0].nameAr is string && data.groups[0].nameAr.size() <= 120))
+          && data.groups[0].type in ['single', 'multiple']
+          && data.groups[0].required is bool
+          && data.groups[0].minSelections is number && data.groups[0].minSelections >= 0 && data.groups[0].minSelections <= 50
+          && data.groups[0].maxSelections is number && data.groups[0].maxSelections >= 1 && data.groups[0].maxSelections <= 50
+          && data.groups[0].displayOrder is number
+          && data.groups[0].enabled is bool
+          && data.groups[0].options is list && data.groups[0].options.size() <= 40
+          && (data.groups[0].options.size() == 0 || (
+            data.groups[0].options[0] is map
+            && data.groups[0].options[0].keys().hasAll(['id', 'name', 'additionalPrice', 'enabled', 'displayOrder'])
+            && data.groups[0].options[0].keys().hasOnly(['id', 'name', 'nameAr', 'additionalPrice', 'enabled', 'isDefault', 'displayOrder'])
+            && data.groups[0].options[0].id is string && data.groups[0].options[0].id.size() >= 1 && data.groups[0].options[0].id.size() <= 80
+            && data.groups[0].options[0].name is string && data.groups[0].options[0].name.size() <= 120
+            && data.groups[0].options[0].additionalPrice is number && data.groups[0].options[0].additionalPrice >= 0 && data.groups[0].options[0].additionalPrice <= 5000
+            && data.groups[0].options[0].enabled is bool
+            && data.groups[0].options[0].displayOrder is number
+          ))
+        ))
+        && (!('allowSpecialInstructions' in data) || data.allowSpecialInstructions is bool)
+        && (!('updatedBy' in data) || (data.updatedBy is string && data.updatedBy.size() <= 200))
+        && (!('createdAt' in data) || data.createdAt is timestamp)
+        && (!('updatedAt' in data) || data.updatedAt is timestamp);
+    }
+
     function isValidStoreSettings(data) {
-      return data.keys().size() >= 1 && data.keys().size() <= 20
+      return data.keys().size() >= 1 && data.keys().size() <= 25
         && data.keys().hasOnly([
           'storeOpen', 'isOpen', 'prepTime', 'whatsappNumber',
           'announcement', 'announcementAr', 'heroTitle', 'heroTitleAr',
-          'heroSubtitle', 'heroSubtitleAr', 'updatedAt', 'createdAt'
+          'heroSubtitle', 'heroSubtitleAr',
+          'milkSelectionEnabled', 'coconutMilkExtraPrice', 'hotColdSelectionEnabled',
+          'updatedAt', 'createdAt'
         ])
         && (!('storeOpen' in data) || data.storeOpen is bool)
         && (!('isOpen' in data) || data.isOpen is bool)
@@ -187,42 +276,76 @@ service cloud.firestore {
         && (!('heroTitleAr' in data) || (data.heroTitleAr is string && data.heroTitleAr.size() <= 140))
         && (!('heroSubtitle' in data) || (data.heroSubtitle is string && data.heroSubtitle.size() <= 300))
         && (!('heroSubtitleAr' in data) || (data.heroSubtitleAr is string && data.heroSubtitleAr.size() <= 300))
+        && (!('milkSelectionEnabled' in data) || data.milkSelectionEnabled is bool)
+        && (!('coconutMilkExtraPrice' in data) || (data.coconutMilkExtraPrice is number && data.coconutMilkExtraPrice >= 0 && data.coconutMilkExtraPrice <= 500))
+        && (!('hotColdSelectionEnabled' in data) || data.hotColdSelectionEnabled is bool)
         && (!('createdAt' in data) || data.createdAt is timestamp)
         && (!('updatedAt' in data) || data.updatedAt is timestamp);
     }
 
-    // Order validation blueprints
+    // Canonical Order validation blueprints (aligned with Palm Metric Admin App)
+    function isValidOrderLineItem(item) {
+      return item is map
+        && item.keys().hasAll(['itemId', 'name', 'price', 'quantity'])
+        && item.keys().hasOnly([
+          'itemId', 'name', 'nameAr', 'price', 'basePrice', 'customizationTotal',
+          'quantity', 'selectedCustomizations', 'specialInstructions', 'note',
+          'imageUrl', 'temperature', 'milkOption', 'milkExtraPrice'
+        ])
+        && item.itemId is string && item.itemId.size() >= 1 && item.itemId.size() <= 128
+        && item.name is string && item.name.size() >= 1 && item.name.size() <= 120
+        && (!('nameAr' in item) || (item.nameAr is string && item.nameAr.size() <= 120))
+        && item.price is number && item.price >= 0 && item.price <= 100000
+        && (!('basePrice' in item) || (item.basePrice is number && item.basePrice >= 0 && item.basePrice <= 100000))
+        && (!('customizationTotal' in item) || (item.customizationTotal is number && item.customizationTotal >= 0 && item.customizationTotal <= 50000))
+        && item.quantity is number && item.quantity >= 1 && item.quantity <= 99
+        && (!('selectedCustomizations' in item) || (item.selectedCustomizations is list && item.selectedCustomizations.size() <= 30 && (item.selectedCustomizations.size() == 0 || item.selectedCustomizations[0] is map)))
+        && (!('specialInstructions' in item) || (item.specialInstructions is string && item.specialInstructions.size() <= 160))
+        && (!('note' in item) || (item.note is string && item.note.size() <= 240))
+        && (!('imageUrl' in item) || (item.imageUrl is string && item.imageUrl.size() <= 512))
+        && (!('temperature' in item) || item.temperature in ['Hot', 'Cold'])
+        && (!('milkOption' in item) || item.milkOption in ['none', 'regular', 'coconut'])
+        && (!('milkExtraPrice' in item) || (item.milkExtraPrice is number && item.milkExtraPrice >= 0 && item.milkExtraPrice <= 500));
+    }
+
     function isValidOrderCreate(data) {
-      return data.keys().hasAll(['orderNumber', 'customerName', 'customerPhone', 'items', 'total', 'status', 'createdAt', 'updatedAt'])
-        && data.keys().hasOnly(['orderNumber', 'orderType', 'customerName', 'customerPhone', 'deliveryLocation', 'mapsLink', 'orderNote', 'items', 'itemCount', 'total', 'status', 'sourceApp', 'lang', 'customerUid', 'createdAt', 'updatedAt'])
+      return data.keys().hasAll(['orderNumber', 'customerUid', 'customerName', 'customerContact', 'items', 'totalBill', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['orderNumber', 'customerUid', 'customerName', 'customerContact', 'items', 'totalBill', 'status', 'notes', 'createdAt', 'updatedAt'])
         && data.orderNumber is string && data.orderNumber.size() >= 3 && data.orderNumber.size() <= 24 && data.orderNumber.matches('^[a-zA-Z0-9_\\-]+$')
-        && data.customerName is string && data.customerName.size() >= 1 && data.customerName.size() <= 100
-        && data.customerPhone is string && data.customerPhone.size() >= 4 && data.customerPhone.size() <= 40
-        && (!('orderType' in data) || data.orderType in ['pickup', 'delivery'])
-        && (!('deliveryLocation' in data) || (data.deliveryLocation is string && data.deliveryLocation.size() <= 300))
-        && (!('mapsLink' in data) || (data.mapsLink is string && data.mapsLink.size() <= 500))
-        && (!('orderNote' in data) || (data.orderNote is string && data.orderNote.size() <= 400))
-        && (!('itemCount' in data) || (data.itemCount is number && data.itemCount >= 1 && data.itemCount <= 500))
-        && (!('sourceApp' in data) || (data.sourceApp is string && data.sourceApp.size() <= 60))
-        && (!('lang' in data) || (data.lang is string && data.lang.size() <= 10))
-        && (!('customerUid' in data) || (data.customerUid is string && data.customerUid.size() <= 128))
+        && data.customerUid is string && data.customerUid == request.auth.uid && data.customerUid.size() <= 128
+        && data.customerName is string && data.customerName.size() >= 1 && data.customerName.size() <= 80
+        && data.customerContact is string && data.customerContact.size() >= 4 && data.customerContact.size() <= 80
         && data.items is list && data.items.size() >= 1 && data.items.size() <= 50
-        && data.items[0] is map
-        && data.total is number && data.total >= 0 && data.total <= 50000
+        && isValidOrderLineItem(data.items[0])
+        && data.totalBill is number && data.totalBill >= 0 && data.totalBill <= 100000
+        && (!('notes' in data) || (data.notes is string && data.notes.size() <= 240))
         && data.status == 'Pending'
         && data.createdAt == request.time
         && data.updatedAt == request.time;
     }
 
     function isValidOrderUpdate(data) {
-      return data.keys().hasAll(['orderNumber', 'customerName', 'customerPhone', 'items', 'total', 'status', 'createdAt', 'updatedAt'])
-        && data.keys().hasOnly(['orderNumber', 'orderType', 'customerName', 'customerPhone', 'deliveryLocation', 'mapsLink', 'orderNote', 'items', 'itemCount', 'total', 'status', 'sourceApp', 'lang', 'customerUid', 'createdAt', 'updatedAt'])
+      return data.keys().hasAll(['orderNumber', 'customerUid', 'customerName', 'customerContact', 'items', 'totalBill', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly([
+          'orderNumber', 'customerUid', 'customerName', 'customerContact',
+          'items', 'subtotal', 'totalBill', 'currency', 'orderType',
+          'status', 'notes', 'sourceApp', 'lang', 'idempotencyKey',
+          'pricingVersion', 'createdAt', 'updatedAt'
+        ])
         && data.orderNumber == existing().orderNumber
+        && data.customerUid == existing().customerUid
         && data.customerName == existing().customerName
-        && data.customerPhone == existing().customerPhone
+        && data.customerContact == existing().customerContact
         && data.items == existing().items
-        && data.total == existing().total
+        && data.totalBill == existing().totalBill
         && data.createdAt == existing().createdAt
+        && (!('subtotal' in existing()) || data.subtotal == existing().subtotal)
+        && (!('currency' in existing()) || data.currency == existing().currency)
+        && (!('orderType' in existing()) || data.orderType == existing().orderType)
+        && (!('sourceApp' in existing()) || data.sourceApp == existing().sourceApp)
+        && (!('lang' in existing()) || data.lang == existing().lang)
+        && (!('idempotencyKey' in existing()) || data.idempotencyKey == existing().idempotencyKey)
+        && (!('pricingVersion' in existing()) || data.pricingVersion == existing().pricingVersion)
         && data.status in ['Pending', 'Preparing', 'Ready', 'Completed', 'Cancelled']
         && data.updatedAt == request.time;
     }
@@ -231,8 +354,7 @@ service cloud.firestore {
       return data.keys().hasAll(['type', 'title', 'status', 'createdAt'])
         && data.keys().hasOnly([
           'type', 'title', 'message', 'orderId', 'orderNumber', 'orderType',
-          'customerName', 'customerPhone', 'deliveryLocation', 'mapsLink',
-          'itemCount', 'total', 'status', 'sourceApp', 'createdAt'
+          'customerName', 'customerPhone', 'itemCount', 'total', 'status', 'sourceApp', 'createdAt'
         ])
         && data.type in ['order', 'feedback', 'customer_signup', 'issue']
         && data.title is string && data.title.size() >= 1 && data.title.size() <= 160
@@ -242,12 +364,10 @@ service cloud.firestore {
         && (!('orderId' in data) || (data.orderId is string && data.orderId.size() <= 128))
         && (!('orderNumber' in data) || (data.orderNumber is string && data.orderNumber.size() <= 40))
         && (!('orderType' in data) || (data.orderType is string && data.orderType.size() <= 20))
-        && (!('customerName' in data) || (data.customerName is string && data.customerName.size() <= 100))
-        && (!('customerPhone' in data) || (data.customerPhone is string && data.customerPhone.size() <= 40))
-        && (!('deliveryLocation' in data) || (data.deliveryLocation is string && data.deliveryLocation.size() <= 300))
-        && (!('mapsLink' in data) || (data.mapsLink is string && data.mapsLink.size() <= 500))
+        && (!('customerName' in data) || (data.customerName is string && data.customerName.size() <= 80))
+        && (!('customerPhone' in data) || (data.customerPhone is string && data.customerPhone.size() <= 80))
         && (!('itemCount' in data) || (data.itemCount is number && data.itemCount >= 0 && data.itemCount <= 500))
-        && (!('total' in data) || (data.total is number && data.total >= 0 && data.total <= 50000))
+        && (!('total' in data) || (data.total is number && data.total >= 0 && data.total <= 100000))
         && (!('sourceApp' in data) || (data.sourceApp is string && data.sourceApp.size() <= 60));
     }
 
@@ -259,157 +379,115 @@ service cloud.firestore {
         && data.status in ['New', 'Reviewed', 'Resolved'];
     }
 
-    function isValidCustomerCreate(data) {
-      return data.keys().hasAll(['name', 'phone', 'createdAt'])
-        && data.keys().hasOnly(['name', 'phone', 'address', 'mapsLink', 'sourceApp', 'createdAt'])
-        && data.name is string && data.name.size() >= 1 && data.name.size() <= 100
-        && data.phone is string && data.phone.size() >= 4 && data.phone.size() <= 40
-        && data.createdAt == request.time
-        && (!('address' in data) || (data.address is string && data.address.size() <= 300))
-        && (!('mapsLink' in data) || (data.mapsLink is string && data.mapsLink.size() <= 500))
-        && (!('sourceApp' in data) || (data.sourceApp is string && data.sourceApp.size() <= 60));
+    function isValidFcmToken(data) {
+      return data.keys().hasAll(['uid', 'token', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'token', 'updatedAt', 'userAgent'])
+        && data.uid is string && data.uid == request.auth.uid && data.uid.size() <= 128
+        && data.token is string && data.token.size() >= 10 && data.token.size() <= 4096
+        && data.updatedAt is string && data.updatedAt.size() <= 64
+        && (!('userAgent' in data) || (data.userAgent is string && data.userAgent.size() <= 512));
     }
 
-    // Publicly readable promotional billboards, offers, banners, promotions, and ads; admin-only writes
+    // Publicly readable active billboards; verified admin writes
     match /billboards/{billboardId} {
       allow get: if isValidId(billboardId);
-      allow list: if true;
-      allow create: if isValidId(billboardId) && isAdmin() && isValidBillboard(incoming());
-      allow update: if isValidId(billboardId) && isAdmin() && isValidBillboard(incoming());
+      allow list: if isVerifiedAdminToken() || resource.data.isActive == true || resource.data.active == true;
+      allow create, update: if isValidId(billboardId) && isAdmin() && isValidBillboard(incoming());
       allow delete: if isValidId(billboardId) && isAdmin();
     }
 
-    match /offers/{offerId} {
-      allow get: if isValidId(offerId);
-      allow list: if true;
-      allow create: if isValidId(offerId) && isAdmin() && isValidBillboard(incoming());
-      allow update: if isValidId(offerId) && isAdmin() && isValidBillboard(incoming());
-      allow delete: if isValidId(offerId) && isAdmin();
-    }
-
-    match /banners/{bannerId} {
-      allow get: if isValidId(bannerId);
-      allow list: if true;
-      allow create: if isValidId(bannerId) && isAdmin() && isValidBillboard(incoming());
-      allow update: if isValidId(bannerId) && isAdmin() && isValidBillboard(incoming());
-      allow delete: if isValidId(bannerId) && isAdmin();
-    }
-
-    match /promotions/{promoId} {
-      allow get: if isValidId(promoId);
-      allow list: if true;
-      allow create: if isValidId(promoId) && isAdmin() && isValidBillboard(incoming());
-      allow update: if isValidId(promoId) && isAdmin() && isValidBillboard(incoming());
-      allow delete: if isValidId(promoId) && isAdmin();
-    }
-
-    match /ads/{adId} {
-      allow get: if isValidId(adId);
-      allow list: if true;
-      allow create: if isValidId(adId) && isAdmin() && isValidBillboard(incoming());
-      allow update: if isValidId(adId) && isAdmin() && isValidBillboard(incoming());
-      allow delete: if isValidId(adId) && isAdmin();
-    }
-
-    match /advertisements/{adId} {
-      allow get: if isValidId(adId);
-      allow list: if true;
-      allow create: if isValidId(adId) && isAdmin() && isValidBillboard(incoming());
-      allow update: if isValidId(adId) && isAdmin() && isValidBillboard(incoming());
-      allow delete: if isValidId(adId) && isAdmin();
-    }
-
-    // Publicly readable menu collections & categories; admin-only writes
+    // Primary menu collection; public reads filtered to inStock items (admins list all)
     match /menu/{itemId} {
       allow get: if isValidId(itemId);
-      allow list: if true;
-      allow create: if isValidId(itemId) && isAdmin() && isValidMenuItem(incoming());
-      allow update: if isValidId(itemId) && isAdmin() && isValidMenuItem(incoming());
+      allow list: if isVerifiedAdminToken() || resource.data.inStock == true;
+      allow create, update: if isValidId(itemId) && isAdmin() && isValidMenuItem(incoming());
       allow delete: if isValidId(itemId) && isAdmin();
     }
 
-    match /menuItems/{itemId} {
-      allow get: if isValidId(itemId);
-      allow list: if true;
-      allow create: if isValidId(itemId) && isAdmin() && isValidMenuItem(incoming());
-      allow update: if isValidId(itemId) && isAdmin() && isValidMenuItem(incoming());
-      allow delete: if isValidId(itemId) && isAdmin();
-    }
-
-    match /products/{productId} {
-      allow get: if isValidId(productId);
-      allow list: if true;
-      allow create: if isValidId(productId) && isAdmin() && isValidMenuItem(incoming());
-      allow update: if isValidId(productId) && isAdmin() && isValidMenuItem(incoming());
-      allow delete: if isValidId(productId) && isAdmin();
-    }
-
-    match /items/{itemId} {
-      allow get: if isValidId(itemId);
-      allow list: if true;
-      allow create: if isValidId(itemId) && isAdmin() && isValidMenuItem(incoming());
-      allow update: if isValidId(itemId) && isAdmin() && isValidMenuItem(incoming());
-      allow delete: if isValidId(itemId) && isAdmin();
-    }
-
+    // Categories
     match /categories/{categoryId} {
       allow get: if isValidId(categoryId);
       allow list: if true;
-      allow create: if isValidId(categoryId) && isAdmin() && isValidCategory(incoming());
-      allow update: if isValidId(categoryId) && isAdmin() && isValidCategory(incoming());
+      allow create, update: if isValidId(categoryId) && isAdmin() && isValidCategory(incoming());
       allow delete: if isValidId(categoryId) && isAdmin();
     }
 
-    // Storefront settings controlled by Verda Admin
+    // Per-product customization groups & options: public single-doc get, strictly admin writes
+    match /productCustomizations/{productId} {
+      allow get: if isValidId(productId);
+      allow list: if isVerifiedAdminToken();
+      allow create, update: if isValidId(productId) && isAdmin() && isValidProductCustomization(incoming(), productId);
+      allow delete: if isValidId(productId) && isAdmin();
+    }
+
+    // Storefront & coffee options settings controlled by Admin App
     match /settings/{settingId} {
       allow get: if isValidId(settingId);
-      allow list: if true;
-      allow create: if isValidId(settingId) && isAdmin() && isValidStoreSettings(incoming());
-      allow update: if isValidId(settingId) && isAdmin() && isValidStoreSettings(incoming());
+      allow list: if isVerifiedAdminToken();
+      allow create, update: if isValidId(settingId) && isAdmin() && isValidStoreSettings(incoming());
       allow delete: if isValidId(settingId) && isAdmin();
     }
 
-    match /storeConfig/{configId} {
-      allow get: if isValidId(configId);
-      allow list: if true;
-      allow create: if isValidId(configId) && isAdmin() && isValidStoreSettings(incoming());
-      allow update: if isValidId(configId) && isAdmin() && isValidStoreSettings(incoming());
-      allow delete: if isValidId(configId) && isAdmin();
+    // Uploaded media assets and chunked video/image payloads
+    match /mediaAssets/{assetId} {
+      allow get: if isValidId(assetId);
+      allow list: if isVerifiedAdminToken();
+      allow create, update, delete: if isValidId(assetId) && isAdmin();
+
+      match /chunks/{chunkId} {
+        allow get: if isValidId(assetId) && isValidId(chunkId);
+        allow list: if isVerifiedAdminToken();
+        allow create, update, delete: if isValidId(assetId) && isValidId(chunkId) && isAdmin();
+      }
     }
 
-    // Orders: Customers can create Pending orders and track their specific order ID via get();
-    // Listing all orders is restricted to Verda Admin to prevent PII scraping.
+    // Orders: Strict PII isolation & Server-Authoritative Creation (Stage 04E).
+    // Finalized orders MUST be created exclusively via createPalmMetricOrder Cloud Function (Admin SDK).
+    // Customers can ONLY read/list orders where customerUid == request.auth.uid.
     match /orders/{orderId} {
-      allow get: if isValidId(orderId);
-      allow list: if isAdmin();
-      allow create: if isValidId(orderId) && isValidOrderCreate(incoming());
+      allow get: if isValidId(orderId) && isSignedIn() && (
+        isAdmin() || ('customerUid' in existing() && existing().customerUid == request.auth.uid)
+      );
+      allow list: if isSignedIn() && (
+        isVerifiedAdminToken() || ('customerUid' in resource.data && resource.data.customerUid == request.auth.uid)
+      );
+      allow create: if false;
       allow update: if isValidId(orderId) && isAdmin() && isValidOrderUpdate(incoming())
         && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']);
       allow delete: if isValidId(orderId) && isAdmin();
     }
 
-    // Reports: Customer app sends order, signup, and feedback reports; Verda Admin reads and manages them.
+    // Idempotency ledger: strictly server-only (Admin SDK bypasses rules; zero client access)
+    match /idempotencyKeys/{keyId} {
+      allow read, write: if false;
+    }
+
+    // Reports: Customer app submits feedback/issues; only verified admins read and manage them
     match /reports/{reportId} {
-      allow create: if isValidId(reportId) && isValidReportCreate(incoming());
+      allow create: if isValidId(reportId) && isSignedIn() && isValidReportCreate(incoming());
       allow get: if isValidId(reportId) && isAdmin();
-      allow list: if isAdmin();
+      allow list: if isVerifiedAdminToken();
       allow update: if isValidId(reportId) && isAdmin() && isValidReportUpdate(incoming())
         && incoming().diff(existing()).affectedKeys().hasOnly(['status']);
       allow delete: if isValidId(reportId) && isAdmin();
     }
 
-    // Customers: Synced on signup for Verda Admin visibility; read/update/delete restricted to admins.
-    match /customers/{customerId} {
-      allow create: if isValidId(customerId) && isValidCustomerCreate(incoming());
-      allow get: if isValidId(customerId) && isAdmin();
-      allow list: if isAdmin();
-      allow update, delete: if isValidId(customerId) && isAdmin();
+    // FCM Notification Tokens: user-owned token documents
+    match /fcmTokens/{tokenId} {
+      allow get: if isSignedIn() && (isAdmin() || ('uid' in existing() && existing().uid == request.auth.uid));
+      allow list: if isSignedIn() && (isVerifiedAdminToken() || ('uid' in resource.data && resource.data.uid == request.auth.uid));
+      allow create: if isSignedIn() && isValidFcmToken(incoming());
+      allow update: if isSignedIn() && isValidFcmToken(incoming())
+        && existing().uid == request.auth.uid
+        && incoming().uid == existing().uid;
+      allow delete: if isSignedIn() && (isAdmin() || existing().uid == request.auth.uid);
     }
 
-    // Admins collection
+    // Admins registry
     match /admins/{adminId} {
-      allow get: if isValidId(adminId) && isSignedIn() && request.auth.uid == adminId;
-      allow list, create, update, delete: if false;
+      allow get: if isValidId(adminId) && isSignedIn() && (request.auth.uid == adminId || isAdmin());
+      allow list: if isVerifiedAdminToken();
+      allow create, update, delete: if false;
     }
   }
 }

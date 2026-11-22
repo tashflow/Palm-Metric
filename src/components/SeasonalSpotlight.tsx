@@ -1,5 +1,6 @@
 import { ArrowRight, Plus, SlidersHorizontal } from 'lucide-react';
 import { COPY } from '../data/i18n';
+import { formatPrice, getCategoryLabel, getItemTitle } from '../lib/format';
 import type { Billboard, Language, MenuItem, TempChoice } from '../types';
 import { StorageImage, StorageVideo } from './MediaAsset';
 
@@ -99,8 +100,9 @@ export function SeasonalSpotlight({
 
   return (
     <section
+      id="palm-seasonal-spotlight"
       aria-labelledby="seasonal-spotlight-heading"
-      className="relative overflow-hidden rounded-3xl border border-[#C9A227]/45 bg-gradient-to-br from-[#10271E] via-[#153227] to-[#0D2119] p-5 sm:p-7 shadow-[0_22px_50px_-14px_rgba(4,14,10,0.72)]"
+      className="relative overflow-hidden rounded-3xl border border-[#C9A227]/35 bg-gradient-to-br from-[#112A20] via-[#163428] to-[#0D2119] p-5 sm:p-7 shadow-[0_22px_50px_-14px_rgba(4,14,10,0.7)]"
     >
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2 pb-5 border-b border-[#C9A227]/20">
         <div>
@@ -109,7 +111,7 @@ export function SeasonalSpotlight({
           </p>
           <h2
             id="seasonal-spotlight-heading"
-            className="mt-1 text-2xl sm:text-3xl font-extrabold tracking-tight text-[#F5F0E6] [text-wrap:balance]"
+            className="font-editorial mt-1 text-2xl sm:text-3xl font-bold tracking-tight text-[#F5F0E6] [text-wrap:balance]"
           >
             {t.seasonalTitle}
           </h2>
@@ -144,7 +146,7 @@ export function SeasonalSpotlight({
               key={billboard.id}
               className={`group flex flex-col ${
                 singleMode ? 'lg:flex-row lg:items-stretch' : ''
-              } overflow-hidden rounded-2xl border border-[#C9A227]/35 bg-[#16362A]/90 transition-transform duration-200 hover:-translate-y-0.5`}
+              } overflow-hidden rounded-2xl border border-[#C9A227]/30 bg-[#153327]/95 transition-transform duration-200 hover:-translate-y-0.5`}
             >
               <div
                 className={`relative overflow-hidden shrink-0 ${
@@ -193,7 +195,9 @@ export function SeasonalSpotlight({
                     {billboard.category && (
                       <>
                         <span aria-hidden="true">·</span>
-                        <span className="text-[#F5F0E6]/80">{billboard.category}</span>
+                        <span className="text-[#F5F0E6]/80">
+                          {getCategoryLabel(billboard.category, lang)}
+                        </span>
                       </>
                     )}
                   </div>
@@ -212,10 +216,7 @@ export function SeasonalSpotlight({
                 {matchedItems.length > 0 ? (
                   <div className="divide-y divide-[#C9A227]/20 border-t border-[#C9A227]/20 pt-3 space-y-2.5">
                     {matchedItems.map((item) => {
-                      const itemName =
-                        lang === 'ar'
-                          ? item.nameAr || item.name
-                          : item.nameEn || item.name;
+                      const itemName = getItemTitle(item, lang);
                       const outOfStock = !item.inStock;
 
                       return (
@@ -236,11 +237,11 @@ export function SeasonalSpotlight({
                             </span>
                             <span className="mt-0.5 flex items-center gap-2 text-xs font-bold text-[#C9A227] tabular-nums">
                               <span>
-                                {item.price} {t.currency}
+                                {formatPrice(item.price)} {t.currency}
                               </span>
-                              {item.originalPrice && item.originalPrice > item.price && (
+                              {item.originalPrice !== undefined && item.originalPrice > item.price && (
                                 <span className="text-[#F5F0E6]/50 line-through">
-                                  {item.originalPrice} {t.currency}
+                                  {formatPrice(item.originalPrice)} {t.currency}
                                 </span>
                               )}
                               {outOfStock && (

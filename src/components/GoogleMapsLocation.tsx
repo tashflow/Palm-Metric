@@ -14,7 +14,7 @@ import { BUSINESS } from '../data/menu';
 import { useGeolocation, type GeolocationErrorCode } from '../hooks/useGeolocation';
 import type { GeoLocation, Language } from '../types';
 
-const MAPS_API_KEY = (import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '').trim();
+const MAPS_API_KEY = (import.meta.env?.VITE_GOOGLE_MAPS_API_KEY || '').trim();
 const DEFAULT_VIEWPORT_CENTER: GeoLocation = { lat: 24.7136, lng: 46.6753 };
 const ATTRIBUTION_IDS = ['gmp_mcp_codeassist_v1_aistudio'];
 

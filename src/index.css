@@ -25,6 +25,14 @@
   font-family: "Noto Sans Arabic", ui-sans-serif, system-ui, sans-serif;
 }
 
+.font-editorial {
+  font-family: "Cormorant Garamond", "Noto Sans Arabic", Georgia, serif;
+}
+
+[dir="rtl"] .font-editorial {
+  font-family: "Noto Sans Arabic", "Cormorant Garamond", ui-sans-serif, sans-serif;
+}
+
 .tabular-nums {
   font-variant-numeric: tabular-nums;
 }

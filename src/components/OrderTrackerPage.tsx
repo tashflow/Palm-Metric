@@ -22,6 +22,7 @@ import type { User } from 'firebase/auth';
 import { BUSINESS } from '../data/menu';
 import { COPY } from '../data/i18n';
 import { subscribeCustomerOrders, subscribeOrder } from '../lib/firestoreSync';
+import { formatPrice } from '../lib/format';
 import { initFCM } from '../lib/fcm';
 import type { Language, Order, OrderStatus, TrackedOrderMeta } from '../types';
 import { StorageImage } from './MediaAsset';
@@ -143,13 +144,22 @@ export function OrderTrackerPage({
         setLoading(false);
       },
       (err) => {
-        setError(err.message);
+        const isPermDenied =
+          err.message.includes('Missing or insufficient permissions') ||
+          err.message.includes('permission-denied');
+        setError(
+          isPermDenied
+            ? t.trackPermissionDenied
+            : err.message && !err.message.startsWith('{')
+              ? err.message
+              : t.orderNotFoundDesc,
+        );
         setLoading(false);
       },
     );
 
     return () => unsub();
-  }, [activeOrderId, firebaseUser, activeLiveOrder]);
+  }, [activeOrderId, firebaseUser, activeLiveOrder, t.trackPermissionDenied, t.orderNotFoundDesc]);
 
   const activeMeta = recentOrders.find((o) => o.id === activeOrderId);
   const displayOrder: Order | null =
@@ -214,10 +224,7 @@ export function OrderTrackerPage({
         dateStyle: 'medium',
         timeStyle: 'short',
       })
-    : new Date().toLocaleString(lang === 'ar' ? 'ar-SA' : 'en-US', {
-        dateStyle: 'medium',
-        timeStyle: 'short',
-      });
+    : '';
 
   const isPickupOrder = displayOrder?.orderType === 'pickup';
   const isWhatsappOnlyOrder = Boolean(displayOrder?.id.startsWith('wa-'));
@@ -234,20 +241,20 @@ export function OrderTrackerPage({
           <span>{t.backToMenu}</span>
         </button>
 
-        <form onSubmit={handleLookup} className="flex items-center gap-2">
-          <div className="relative">
+        <form onSubmit={handleLookup} className="flex w-full sm:w-auto items-center gap-2">
+          <div className="relative flex-1 sm:flex-initial">
             <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#C9A227]" />
             <input
               type="text"
               value={lookupInput}
               onChange={(e) => setLookupInput(e.target.value)}
               placeholder={t.trackLookupPlaceholder}
-              className="h-11 w-44 sm:w-56 rounded-xl border border-[#C9A227]/35 bg-[#132D23] ps-9 pe-3 text-xs sm:text-sm text-[#F5F0E6] placeholder:text-[#F5F0E6]/50 focus:border-[#C9A227] focus:outline-none"
+              className="h-11 w-full sm:w-56 rounded-xl border border-[#C9A227]/35 bg-[#132D23] ps-9 pe-3 text-xs sm:text-sm text-[#F5F0E6] placeholder:text-[#F5F0E6]/50 focus:border-[#C9A227] focus:outline-none"
             />
           </div>
           <button
             type="submit"
-            className="palm-btn-gold min-h-[44px] rounded-xl px-4 text-xs sm:text-sm font-extrabold cursor-pointer"
+            className="palm-btn-gold min-h-[44px] rounded-xl px-4 text-xs sm:text-sm font-extrabold shrink-0 cursor-pointer"
           >
             {t.trackLookupBtn}
           </button>
@@ -273,7 +280,7 @@ export function OrderTrackerPage({
                   key={meta.id}
                   type="button"
                   onClick={() => onSelectOrderId(meta.id)}
-                  className={`min-h-[40px] rounded-xl px-3.5 py-1.5 font-en text-xs font-extrabold whitespace-nowrap shrink-0 cursor-pointer ${
+                  className={`min-h-[44px] rounded-xl px-3.5 py-2 font-en text-xs font-extrabold whitespace-nowrap shrink-0 cursor-pointer ${
                     selected
                       ? 'palm-btn-gold'
                       : 'bg-[#132D23] border border-[#C9A227]/30 text-[#F5F0E6]'
@@ -394,7 +401,7 @@ export function OrderTrackerPage({
       ) : (
         <div className="space-y-5">
           {typeof window !== 'undefined' && 'Notification' in window && !pushEnabled && (
-            <div className="flex items-center justify-between gap-3 rounded-2xl bg-[#EAE2D0] border border-[#C9A227]/40 p-4 shadow-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl bg-[#EAE2D0] border border-[#C9A227]/40 p-4 shadow-xs">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#1A3C2F] text-[#C9A227]">
                   <Bell className="h-5 w-5" />
@@ -412,7 +419,7 @@ export function OrderTrackerPage({
                 type="button"
                 disabled={pushing}
                 onClick={handleEnablePush}
-                className="palm-btn-gold min-h-[40px] rounded-xl px-4 py-2 text-xs font-extrabold shrink-0 cursor-pointer disabled:opacity-60"
+                className="palm-btn-gold min-h-[44px] rounded-xl px-4 py-2 text-xs font-extrabold shrink-0 cursor-pointer disabled:opacity-60"
               >
                 {pushing ? '...' : t.enablePushBtn}
               </button>
@@ -470,7 +477,7 @@ export function OrderTrackerPage({
                   <button
                     type="button"
                     onClick={() => setShowReceipt((prev) => !prev)}
-                    className="palm-btn-forest inline-flex min-h-[42px] items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-extrabold cursor-pointer"
+                    className="palm-btn-forest inline-flex min-h-[44px] items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-extrabold cursor-pointer"
                   >
                     <Receipt className="h-4 w-4 text-[#C9A227]" />
                     <span>
@@ -585,7 +592,7 @@ export function OrderTrackerPage({
                       </div>
                     </div>
                     <span className="font-en text-sm font-extrabold text-[#1A3C2F] tabular-nums shrink-0">
-                      {item.price * item.quantity} {t.currency}
+                      {formatPrice(item.price * item.quantity)} {t.currency}
                     </span>
                   </li>
                 ))}
@@ -594,7 +601,7 @@ export function OrderTrackerPage({
               <div className="flex items-center justify-between border-t border-[#1A3C2F]/10 pt-4">
                 <span className="text-sm font-bold text-[#4A6457]">{t.totalLabel}</span>
                 <span className="font-en text-xl font-extrabold text-[#1A3C2F] tabular-nums">
-                  {displayOrder.total} {t.currency}
+                  {formatPrice(displayOrder.total)} {t.currency}
                 </span>
               </div>
 
@@ -626,14 +633,16 @@ export function OrderTrackerPage({
                         ? `إيصال الطلب — ${BUSINESS.nameAr}`
                         : `Order Receipt — ${BUSINESS.nameEn}`}
                     </h2>
-                    <p className="text-xs font-semibold text-[#546E61]">{formattedDateTime}</p>
+                    {formattedDateTime && (
+                      <p className="text-xs font-semibold text-[#546E61]">{formattedDateTime}</p>
+                    )}
                   </div>
                 </div>
 
                 <button
                   type="button"
                   onClick={() => window.print()}
-                  className="palm-btn-forest inline-flex min-h-[40px] items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold cursor-pointer print:hidden"
+                  className="palm-btn-forest inline-flex min-h-[44px] items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold cursor-pointer print:hidden"
                 >
                   <Printer className="h-3.5 w-3.5 text-[#C9A227]" />
                   <span>{lang === 'ar' ? 'طباعة / حفظ الإيصال' : 'Print / Save Receipt'}</span>
@@ -693,7 +702,7 @@ export function OrderTrackerPage({
                       {item.note && <p className="text-[11px] text-[#546E61]">{item.note}</p>}
                     </div>
                     <span className="font-en font-extrabold tabular-nums shrink-0">
-                      {item.price * item.quantity} {t.currency}
+                      {formatPrice(item.price * item.quantity)} {t.currency}
                     </span>
                   </div>
                 ))}
@@ -702,7 +711,7 @@ export function OrderTrackerPage({
               <div className="flex items-center justify-between text-base sm:text-lg font-extrabold text-[#1A3C2F]">
                 <span>{t.totalLabel}</span>
                 <span className="font-en tabular-nums">
-                  {displayOrder.total} {t.currency}
+                  {formatPrice(displayOrder.total)} {t.currency}
                 </span>
               </div>
 

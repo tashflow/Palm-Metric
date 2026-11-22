@@ -10,9 +10,11 @@ import {
   writeBatch,
   type DocumentData,
 } from 'firebase/firestore';
-import { MENU_ITEMS, CATEGORIES } from '../data/menu';
+import { httpsCallable } from 'firebase/functions';
+import { canonicalizeProductId, MENU_ITEMS, CATEGORIES } from '../data/menu';
 import type {
   Billboard,
+  CoffeeOptionsSettings,
   Language,
   MediaType,
   MenuItem,
@@ -20,9 +22,20 @@ import type {
   OrderLineItem,
   OrderStatus,
   OrderType,
+  SelectedCustomizationItem,
   StoreSettings,
 } from '../types';
-import { auth, db, handleFirestoreError, OperationType, resolveStorageUrl } from './firebase';
+import { DEFAULT_COFFEE_OPTIONS } from './customization';
+import {
+  auth,
+  db,
+  ensureGuestFirebaseSession,
+  functions,
+  handleFirestoreError,
+  OperationType,
+  resolveStorageUrl,
+} from './firebase';
+import { roundCurrency } from './format';
 
 function inferMediaType(data: DocumentData, url: string): MediaType {
   const explicit = String(data.mediaType ?? data.type ?? '').toLowerCase();
@@ -100,10 +113,12 @@ function pickRawBillboardMediaField(data: DocumentData): string {
 }
 
 function findLocalCatalogMatch(id: string, name: string) {
+  const canonical = canonicalizeProductId(id).toLowerCase();
   const cleanId = id.trim().toLowerCase();
   const cleanName = name.trim().toLowerCase();
   return MENU_ITEMS.find(
     (item) =>
+      item.id.toLowerCase() === canonical ||
       item.id.toLowerCase() === cleanId ||
       item.nameEn.toLowerCase() === cleanName ||
       item.nameAr.toLowerCase() === cleanName,
@@ -114,6 +129,29 @@ function findCategoryArabicLabel(category: string): string | undefined {
   const clean = category.trim().toLowerCase();
   const found = CATEGORIES.find((c) => c.en.toLowerCase() === clean || c.id.toLowerCase() === clean);
   return found?.ar;
+}
+
+function parseOptionalString(val: unknown): string | undefined {
+  if (typeof val !== 'string') return undefined;
+  const trimmed = val.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function parseStringList(val: unknown): string[] | undefined {
+  if (Array.isArray(val)) {
+    const cleaned = val
+      .map((entry) => (typeof entry === 'string' ? entry.trim() : ''))
+      .filter((entry) => entry.length > 0);
+    return cleaned.length > 0 ? cleaned : undefined;
+  }
+  if (typeof val === 'string') {
+    const cleaned = val
+      .split(/[,،·/|]+/)
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.length > 0);
+    return cleaned.length > 0 ? cleaned : undefined;
+  }
+  return undefined;
 }
 
 export function subscribeBillboards(
@@ -174,18 +212,27 @@ export function subscribeBillboards(
   );
 }
 
-const FALLBACK_MENU_ITEMS: MenuItem[] = MENU_ITEMS.map((item) => ({
-  id: item.id,
-  name: item.nameEn,
-  nameAr: item.nameAr,
-  nameEn: item.nameEn,
-  description: '',
-  price: item.price,
-  category: 'Specialty',
-  imageUrl: '',
-  inStock: true,
-  supportsTemp: item.supportsTemp,
-}));
+const FALLBACK_MENU_ITEMS: MenuItem[] = MENU_ITEMS.map((item, idx) => {
+  const cat = CATEGORIES.find((c) => c.id === item.categoryId);
+  return {
+    id: item.id,
+    name: item.nameEn,
+    nameAr: item.nameAr,
+    nameEn: item.nameEn,
+    description: '',
+    price: item.price,
+    category: cat?.en || 'Specialty',
+    categoryAr: cat?.ar,
+    imageUrl: '',
+    inStock: true,
+    supportsTemp: item.supportsTemp,
+    order: idx,
+    origin: item.origin,
+    originAr: item.originAr,
+    country: item.country,
+    countryAr: item.countryAr,
+  };
+});
 
 export function subscribeMenu(
   onData: (items: MenuItem[]) => void,
@@ -211,6 +258,7 @@ export function subscribeMenu(
             const name = String(data.name ?? 'Untitled Item');
             const categoryText = String(data.category ?? 'Signature');
             const localMatch = findLocalCatalogMatch(d.id, name);
+            const localIdx = localMatch ? MENU_ITEMS.indexOf(localMatch) : -1;
 
             const nameAr = data.nameAr ? String(data.nameAr) : localMatch?.nameAr;
             const nameEn = data.nameEn ? String(data.nameEn) : name;
@@ -230,22 +278,63 @@ export function subscribeMenu(
               nameAr,
               nameEn,
               description: String(data.description ?? ''),
-              descriptionAr: data.descriptionAr ? String(data.descriptionAr) : undefined,
+              descriptionAr: parseOptionalString(data.descriptionAr),
               price: Number.isFinite(price) ? price : 0,
+              originalPrice:
+                typeof data.originalPrice === 'number' && Number.isFinite(data.originalPrice)
+                  ? data.originalPrice
+                  : undefined,
+              isOffer: typeof data.isOffer === 'boolean' ? data.isOffer : undefined,
+              offerLabel: parseOptionalString(data.offerLabel),
               category: categoryText,
               categoryAr: categoryArText,
               imageUrl,
               inStock: isMenuItemInStock(data),
+              prepTime: parseOptionalString(data.prepTime),
               supportsTemp:
                 isCoffeeOfTheDay ||
                 Boolean(localMatch?.supportsTemp) ||
+                Boolean(data.allowTemperature) ||
+                Boolean(data.supportsTemp) ||
                 /hot\s*\/\s*cold|حار\s*\/\s*بارد/i.test(`${name} ${nameAr ?? ''}`),
-              order: typeof data.order === 'number' ? data.order : undefined,
+              allowMilkOption:
+                typeof data.allowMilkOption === 'boolean' ? data.allowMilkOption : undefined,
+              coconutMilkPrice:
+                typeof data.coconutMilkPrice === 'number' &&
+                Number.isFinite(data.coconutMilkPrice)
+                  ? data.coconutMilkPrice
+                  : undefined,
+              allowTemperature:
+                typeof data.allowTemperature === 'boolean' ? data.allowTemperature : undefined,
+              order:
+                typeof data.order === 'number'
+                  ? data.order
+                  : localIdx >= 0
+                    ? localIdx
+                    : undefined,
+              origin: parseOptionalString(data.origin) ?? localMatch?.origin,
+              originAr: parseOptionalString(data.originAr) ?? localMatch?.originAr,
+              region: parseOptionalString(data.region),
+              regionAr: parseOptionalString(data.regionAr),
+              country: parseOptionalString(data.country) ?? localMatch?.country,
+              countryAr: parseOptionalString(data.countryAr) ?? localMatch?.countryAr,
+              processingMethod: parseOptionalString(data.processingMethod),
+              processingMethodAr: parseOptionalString(data.processingMethodAr),
+              roastLevel: parseOptionalString(data.roastLevel),
+              altitude: parseOptionalString(data.altitude),
+              variety: parseOptionalString(data.variety),
+              tastingNotes: parseStringList(data.tastingNotes),
+              tastingNotesAr: parseStringList(data.tastingNotesAr),
+              brewMethods: parseStringList(data.brewMethods),
+              producer: parseOptionalString(data.producer),
             } satisfies MenuItem;
           }),
         );
 
         resolved.sort((a, b) => {
+          if (a.order !== undefined && b.order !== undefined) return a.order - b.order;
+          if (a.order !== undefined) return -1;
+          if (b.order !== undefined) return 1;
           if (a.category !== b.category) return a.category.localeCompare(b.category);
           return a.name.localeCompare(b.name);
         });
@@ -265,32 +354,128 @@ export function subscribeMenu(
 export function subscribeStoreSettings(
   onData: (settings: StoreSettings) => void,
 ): () => void {
-  onData({ storeOpen: true });
-  return () => {};
+  let latestSettings: StoreSettings = {
+    storeOpen: true,
+    coffeeOptions: { ...DEFAULT_COFFEE_OPTIONS },
+  };
+  onData(latestSettings);
+
+  // Admin App stores milk & temperature configuration at settings/coffeeOptions (public get)
+  const coffeeOptionsRef = doc(db, 'settings', 'coffeeOptions');
+  const unsubCoffee = onSnapshot(
+    coffeeOptionsRef,
+    (snap) => {
+      if (!snap.exists()) {
+        latestSettings = {
+          ...latestSettings,
+          coffeeOptions: { ...DEFAULT_COFFEE_OPTIONS },
+        };
+        onData(latestSettings);
+        return;
+      }
+      const data = snap.data();
+      const parsedCoffee: CoffeeOptionsSettings = {
+        milkSelectionEnabled:
+          typeof data.milkSelectionEnabled === 'boolean'
+            ? data.milkSelectionEnabled
+            : DEFAULT_COFFEE_OPTIONS.milkSelectionEnabled,
+        coconutMilkExtraPrice:
+          typeof data.coconutMilkExtraPrice === 'number' &&
+          Number.isFinite(data.coconutMilkExtraPrice) &&
+          data.coconutMilkExtraPrice >= 0
+            ? roundCurrency(Math.min(500, data.coconutMilkExtraPrice))
+            : DEFAULT_COFFEE_OPTIONS.coconutMilkExtraPrice,
+        hotColdSelectionEnabled:
+          typeof data.hotColdSelectionEnabled === 'boolean'
+            ? data.hotColdSelectionEnabled
+            : DEFAULT_COFFEE_OPTIONS.hotColdSelectionEnabled,
+        updatedAtMs: extractTimestampMs(data.updatedAt),
+      };
+      latestSettings = {
+        ...latestSettings,
+        coffeeOptions: parsedCoffee,
+      };
+      onData(latestSettings);
+    },
+    (error) => {
+      console.warn('settings/coffeeOptions listener unavailable, using defaults:', error);
+    },
+  );
+
+  return () => {
+    unsubCoffee();
+  };
+}
+
+export class GuestFirebaseAuthUnavailableError extends Error {
+  readonly code?: string;
+  constructor(code?: string) {
+    super(
+      code
+        ? `Guest Firebase session unavailable (${code}). Enable Anonymous Auth in Firebase Console.`
+        : 'Guest Firebase session unavailable.',
+    );
+    this.name = 'GuestFirebaseAuthUnavailableError';
+    this.code = code;
+  }
 }
 
 export interface CreateOrderInput {
   orderType: OrderType;
   customerName: string;
   customerPhone: string;
-  deliveryLocation?: string;
-  mapsLink?: string;
   orderNote?: string;
   items: OrderLineItem[];
   total: number;
   lang?: Language;
 }
 
-export async function createOrder(
+function sanitizeSelectedCustomizations(
+  items: SelectedCustomizationItem[] | undefined,
+): SelectedCustomizationItem[] | undefined {
+  if (!Array.isArray(items) || items.length === 0) return undefined;
+  const cleaned = items.slice(0, 30).map((sel) => ({
+    groupId: String(sel.groupId || '').slice(0, 80),
+    groupName: String(sel.groupName || '').slice(0, 120),
+    ...(sel.groupNameAr ? { groupNameAr: String(sel.groupNameAr).slice(0, 120) } : {}),
+    optionId: String(sel.optionId || '').slice(0, 80),
+    optionName: String(sel.optionName || '').slice(0, 120),
+    ...(sel.optionNameAr ? { optionNameAr: String(sel.optionNameAr).slice(0, 120) } : {}),
+    additionalPrice: roundCurrency(
+      typeof sel.additionalPrice === 'number' &&
+        Number.isFinite(sel.additionalPrice) &&
+        sel.additionalPrice > 0
+        ? Math.min(5000, sel.additionalPrice)
+        : 0,
+    ),
+  }));
+  return cleaned.length > 0 ? cleaned : undefined;
+}
+
+export interface CanonicalOrderPayload {
+  orderNumber: string;
+  customerUid: string;
+  customerName: string;
+  customerContact: string;
+  items: Record<string, unknown>[];
+  totalBill: number;
+  status: 'Pending';
+  notes: string;
+}
+
+export function buildCanonicalOrderPayload(
   input: CreateOrderInput,
-): Promise<{ id: string; orderNumber: string }> {
-  const customerUid = auth.currentUser?.uid || `guest_${Date.now()}`;
+  customerUid: string,
+  orderNumber: string,
+): CanonicalOrderPayload {
+  const cleanUid = customerUid.trim();
+  if (!cleanUid || cleanUid.length > 128) {
+    throw new GuestFirebaseAuthUnavailableError('auth/missing-uid');
+  }
 
   const customerName = input.customerName.trim().slice(0, 80);
   const customerContact = input.customerPhone.trim().slice(0, 80);
-  const deliveryLocation = input.deliveryLocation?.trim();
-  const mapsLink = input.mapsLink?.trim();
-  const orderNote = input.orderNote?.trim();
+  const rawUserNote = input.orderNote?.trim() || '';
 
   if (!customerName) {
     throw new Error('Customer name is required.');
@@ -302,71 +487,282 @@ export async function createOrder(
     throw new Error('Order must include between 1 and 50 items.');
   }
 
-  const orderRef = doc(collection(db, 'orders'));
-  const randomCode = Math.floor(1000 + Math.random() * 9000);
-  const orderNumber = `PM-${randomCode}`;
+  const sanitizedItems = input.items.slice(0, 50).map((item) => {
+    const cleanQty = Math.max(1, Math.min(99, Math.round(item.quantity)));
+    const cleanUnitPrice = roundCurrency(
+      typeof item.price === 'number' && Number.isFinite(item.price) && item.price >= 0
+        ? Math.min(100000, item.price)
+        : 0,
+    );
+    const selectedCustomizations = sanitizeSelectedCustomizations(item.selectedCustomizations);
+    const specialInstructions = item.specialInstructions?.trim().slice(0, 160) || undefined;
 
-  // Keep order line item imageUrl short (skip large inline data: URIs) to stay well within doc limits
-  const sanitizedItems = input.items.slice(0, 50).map((item) => ({
-    itemId: item.itemId.slice(0, 128),
-    name: item.name.slice(0, 120),
-    price: Number(item.price.toFixed(2)),
-    quantity: Math.max(1, Math.min(99, Math.round(item.quantity))),
-    note: item.note.trim().slice(0, 160),
-    imageUrl: item.imageUrl.startsWith('data:') ? '' : item.imageUrl.slice(0, 512),
-  }));
+    const entry: Record<string, unknown> = {
+      itemId: item.itemId.slice(0, 128),
+      name: item.name.slice(0, 120),
+      price: cleanUnitPrice,
+      quantity: cleanQty,
+      note: (item.note || '').trim().slice(0, 240),
+      imageUrl: item.imageUrl.startsWith('data:') ? '' : item.imageUrl.slice(0, 512),
+    };
 
-  const cleanTotal = Number(Math.max(0, Math.min(100000, input.total)).toFixed(2));
+    if (item.nameAr) entry.nameAr = item.nameAr.slice(0, 120);
+    if (typeof item.basePrice === 'number' && Number.isFinite(item.basePrice)) {
+      entry.basePrice = roundCurrency(Math.max(0, item.basePrice));
+    }
+    if (
+      typeof item.customizationTotal === 'number' &&
+      Number.isFinite(item.customizationTotal)
+    ) {
+      entry.customizationTotal = roundCurrency(Math.max(0, item.customizationTotal));
+    }
+    if (selectedCustomizations) {
+      entry.selectedCustomizations = selectedCustomizations;
+    }
+    if (specialInstructions) {
+      entry.specialInstructions = specialInstructions;
+    }
+    if (item.temperature === 'Hot' || item.temperature === 'Cold') {
+      entry.temperature = item.temperature;
+    }
+    if (
+      item.milkOption === 'none' ||
+      item.milkOption === 'regular' ||
+      item.milkOption === 'coconut'
+    ) {
+      entry.milkOption = item.milkOption;
+    }
+    if (typeof item.milkExtraPrice === 'number' && Number.isFinite(item.milkExtraPrice)) {
+      entry.milkExtraPrice = roundCurrency(Math.max(0, item.milkExtraPrice));
+    }
+    return entry;
+  });
 
-  const combinedNotes = [
-    input.orderType === 'delivery' ? 'Delivery' : 'Pickup',
-    deliveryLocation,
-    mapsLink,
-    orderNote,
-  ]
-    .filter(Boolean)
-    .join(' | ')
-    .slice(0, 240);
+  const computedTotal = roundCurrency(
+    sanitizedItems.reduce(
+      (sum, it) => sum + Number(it.price) * Number(it.quantity),
+      0,
+    ),
+  );
+  const totalBill = roundCurrency(Math.max(0, Math.min(100000, computedTotal)));
 
-  // Matches Admin App's strict isValidOrderCreate(data) rule schema
-  const payload: Record<string, unknown> = {
+  // Prefix concise Pickup indicator within Admin's 240-char notes cap
+  const notes = rawUserNote ? `Pickup · ${rawUserNote}`.slice(0, 240) : 'Pickup';
+
+  return {
     orderNumber,
-    customerUid,
-    orderType: input.orderType,
+    customerUid: cleanUid,
     customerName,
-    customerPhone: customerContact,
+    customerContact,
     items: sanitizedItems,
-    total: cleanTotal,
+    totalBill,
     status: 'Pending',
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
+    notes,
   };
+}
 
-  if (deliveryLocation) {
-    payload.deliveryLocation = deliveryLocation;
-  }
-  if (mapsLink) {
-    payload.mapsLink = mapsLink;
-  }
-  if (orderNote) {
-    payload.orderNote = orderNote;
-  }
-  const itemCount = sanitizedItems.reduce((sum, item) => sum + item.quantity, 0);
-  if (itemCount > 0) {
-    payload.itemCount = itemCount;
-  }
-  payload.sourceApp = 'palm-metric-order';
-  payload.lang = input.lang ?? 'ar';
+export class BackendOrderError extends Error {
+  readonly code: string;
+  readonly reasonCode?: string;
 
-  try {
-    await setDoc(orderRef, payload);
-    return { id: orderRef.id, orderNumber };
-  } catch (error) {
-    handleFirestoreError(error, OperationType.CREATE, `orders/${orderRef.id}`);
+  constructor(code: string, message: string, reasonCode?: string) {
+    super(message);
+    this.name = 'BackendOrderError';
+    this.code = code;
+    this.reasonCode = reasonCode;
   }
 }
 
-function mapOrderSnapshot(id: string, data: DocumentData): Order {
+export interface CallableCreateOrderRequest {
+  idempotencyKey: string;
+  orderType: 'pickup';
+  currency: 'SAR';
+  lang?: Language;
+  customerName: string;
+  customerContact: string;
+  orderNote?: string;
+  items: Array<{
+    itemId: string;
+    quantity: number;
+    temperature?: 'Hot' | 'Cold';
+    specialInstructions?: string;
+    selectedCustomizations?: Array<{
+      groupId: string;
+      optionId: string;
+    }>;
+  }>;
+}
+
+export interface VerifiedOrderResult {
+  id: string;
+  orderNumber: string;
+  customerUid: string;
+  customerName: string;
+  customerContact: string;
+  orderType: 'pickup';
+  currency: 'SAR';
+  status: OrderStatus;
+  notes: string;
+  subtotal: number;
+  totalBill: number;
+  pricingVersion: number;
+  idempotentReplay: boolean;
+  items: OrderLineItem[];
+}
+
+function fnv1aHex(input: string, seedOffset: number): string {
+  let hash = (0x811c9dc5 ^ seedOffset) >>> 0;
+  for (let i = 0; i < input.length; i += 1) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash.toString(16).padStart(8, '0');
+}
+
+export function computeDeterministicIdempotencyKey(
+  checkoutFingerprint: string,
+  attemptNonce: string,
+): string {
+  const cleanNonce = attemptNonce.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 32) || 'attempt';
+  const combined = `${checkoutFingerprint}::${cleanNonce}`;
+  const h1 = fnv1aHex(combined, 0);
+  const h2 = fnv1aHex(combined.split('').reverse().join(''), 0x9e3779b9);
+  return `pm_${cleanNonce}_${h1}${h2}`.slice(0, 120);
+}
+
+export function buildCallableCreateOrderPayload(
+  input: CreateOrderInput & { idempotencyKey: string },
+): CallableCreateOrderRequest {
+  if (input.orderType !== 'pickup') {
+    throw new BackendOrderError('invalid-argument', 'Palm Metric supports pickup orders only.', 'INVALID_ORDER_TYPE');
+  }
+
+  const customerName = input.customerName.trim().slice(0, 80);
+  const customerContact = input.customerPhone.trim().slice(0, 80);
+  const orderNote = input.orderNote?.trim().slice(0, 220) || undefined;
+  const idempotencyKey = input.idempotencyKey.trim();
+
+  if (!idempotencyKey || idempotencyKey.length < 8) {
+    throw new BackendOrderError('invalid-argument', 'Invalid idempotency key.', 'INVALID_IDEMPOTENCY_KEY');
+  }
+  if (!customerName) {
+    throw new BackendOrderError('invalid-argument', 'Customer name is required.', 'INVALID_CUSTOMER_NAME');
+  }
+  if (customerContact.length < 4) {
+    throw new BackendOrderError('invalid-argument', 'Mobile number must be at least 4 characters.', 'INVALID_CUSTOMER_CONTACT');
+  }
+  if (input.items.length === 0 || input.items.length > 50) {
+    throw new BackendOrderError('invalid-argument', 'Order must include between 1 and 50 items.', 'ITEMS_COUNT_OUT_OF_RANGE');
+  }
+
+  return {
+    idempotencyKey,
+    orderType: 'pickup',
+    currency: 'SAR',
+    ...(input.lang ? { lang: input.lang } : {}),
+    customerName,
+    customerContact,
+    ...(orderNote ? { orderNote } : {}),
+    items: input.items.slice(0, 50).map((item) => {
+      const cleanQty = Math.max(1, Math.min(99, Math.round(item.quantity)));
+      const specialInstructions = item.specialInstructions?.trim().slice(0, 160) || undefined;
+      const selectedCustomizations =
+        Array.isArray(item.selectedCustomizations) && item.selectedCustomizations.length > 0
+          ? item.selectedCustomizations.slice(0, 30).map((sel) => ({
+              groupId: String(sel.groupId || '').trim().slice(0, 80),
+              optionId: String(sel.optionId || '').trim().slice(0, 80),
+            }))
+          : undefined;
+
+      return {
+        itemId: canonicalizeProductId(item.itemId).slice(0, 128),
+        quantity: cleanQty,
+        ...(item.temperature === 'Hot' || item.temperature === 'Cold'
+          ? { temperature: item.temperature }
+          : {}),
+        ...(specialInstructions ? { specialInstructions } : {}),
+        ...(selectedCustomizations ? { selectedCustomizations } : {}),
+      };
+    }),
+  };
+}
+
+function normalizeFirebaseFunctionsCode(rawCode: unknown): string {
+  const text = typeof rawCode === 'string' ? rawCode.trim().toLowerCase() : '';
+  return text.startsWith('functions/') ? text.slice('functions/'.length) : text || 'internal';
+}
+
+export async function createVerifiedPalmMetricOrder(
+  input: CreateOrderInput & { idempotencyKey: string },
+): Promise<VerifiedOrderResult> {
+  const session = await ensureGuestFirebaseSession();
+  const realUid = session.user?.uid;
+  if (!realUid) {
+    throw new GuestFirebaseAuthUnavailableError(session.errorCode);
+  }
+
+  const requestPayload = buildCallableCreateOrderPayload(input);
+  const createOrderFn = httpsCallable<CallableCreateOrderRequest, Record<string, unknown>>(
+    functions,
+    'createPalmMetricOrder',
+  );
+
+  try {
+    const result = await createOrderFn(requestPayload);
+    const data = result.data;
+    if (!data || typeof data.orderId !== 'string' || typeof data.orderNumber !== 'string') {
+      throw new BackendOrderError('internal', 'Invalid response received from order backend.');
+    }
+
+    const mappedOrder = mapOrderSnapshot(data.orderId, data as DocumentData);
+
+    return {
+      id: data.orderId,
+      orderNumber: data.orderNumber,
+      customerUid: typeof data.customerUid === 'string' ? data.customerUid : realUid,
+      customerName: mappedOrder.customerName,
+      customerContact: mappedOrder.customerPhone,
+      orderType: 'pickup',
+      currency: 'SAR',
+      status: mappedOrder.status,
+      notes: typeof data.notes === 'string' ? data.notes : 'Pickup',
+      subtotal: roundCurrency(Number(data.subtotal ?? data.totalBill ?? mappedOrder.total)),
+      totalBill: roundCurrency(Number(data.totalBill ?? mappedOrder.total)),
+      pricingVersion: typeof data.pricingVersion === 'number' ? data.pricingVersion : 1,
+      idempotentReplay: Boolean(data.idempotentReplay),
+      items: mappedOrder.items,
+    };
+  } catch (err) {
+    if (err instanceof BackendOrderError || err instanceof GuestFirebaseAuthUnavailableError) {
+      throw err;
+    }
+    const errObj =
+      typeof err === 'object' && err !== null ? (err as Record<string, unknown>) : {};
+    const code = normalizeFirebaseFunctionsCode(errObj.code);
+    const details =
+      typeof errObj.details === 'object' && errObj.details !== null
+        ? (errObj.details as Record<string, unknown>)
+        : {};
+    const reasonCode =
+      typeof details.reasonCode === 'string' ? details.reasonCode : undefined;
+    const message =
+      err instanceof Error && err.message ? err.message : 'Unable to verify and place order.';
+    throw new BackendOrderError(code, message, reasonCode);
+  }
+}
+
+export async function createOrder(
+  input: CreateOrderInput,
+): Promise<VerifiedOrderResult> {
+  const randomNonce = `ord_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+  const key = computeDeterministicIdempotencyKey(
+    `${input.customerPhone}:${input.items.map((i) => `${i.itemId}x${i.quantity}`).join(',')}`,
+    randomNonce,
+  );
+  return createVerifiedPalmMetricOrder({ ...input, idempotencyKey: key });
+}
+
+export function mapOrderSnapshot(id: string, data: DocumentData): Order {
   const rawStatus = String(data.status ?? 'Pending');
   const normalizedStatus = (['Pending', 'Preparing', 'Ready', 'Completed', 'Cancelled'].includes(
     rawStatus,
@@ -375,31 +771,85 @@ function mapOrderSnapshot(id: string, data: DocumentData): Order {
     : 'Pending') as OrderStatus;
 
   const rawItems = Array.isArray(data.items) ? data.items : [];
-  const items: OrderLineItem[] = rawItems.map((it: DocumentData) => ({
-    itemId: String(it.itemId ?? ''),
-    name: String(it.name ?? 'Item'),
-    price: Number(it.price ?? 0),
-    quantity: Number(it.quantity ?? 1),
-    note: String(it.note ?? ''),
-    imageUrl: String(it.imageUrl ?? ''),
-  }));
+  const items: OrderLineItem[] = rawItems.map((it: DocumentData) => {
+    const selectedCustomizations = Array.isArray(it.selectedCustomizations)
+      ? (it.selectedCustomizations as SelectedCustomizationItem[])
+      : undefined;
+    const itemSummaryParts: string[] = [];
+    if (it.note) {
+      itemSummaryParts.push(String(it.note));
+    } else {
+      if (it.temperature) itemSummaryParts.push(String(it.temperature));
+      if (it.milkOption === 'coconut') {
+        itemSummaryParts.push(
+          typeof it.milkExtraPrice === 'number' && it.milkExtraPrice > 0
+            ? `Coconut Milk (+${it.milkExtraPrice} ﷼)`
+            : 'Coconut Milk',
+        );
+      } else if (it.milkOption === 'regular') {
+        itemSummaryParts.push('Regular Milk');
+      }
+      if (selectedCustomizations && selectedCustomizations.length > 0) {
+        itemSummaryParts.push(
+          selectedCustomizations.map((c) => c.optionName).join(', '),
+        );
+      }
+      if (it.specialInstructions) {
+        itemSummaryParts.push(String(it.specialInstructions));
+      }
+    }
+
+    return {
+      itemId: String(it.itemId ?? ''),
+      name: String(it.name ?? 'Item'),
+      nameAr: it.nameAr ? String(it.nameAr) : undefined,
+      price: Number(it.price ?? 0),
+      basePrice: typeof it.basePrice === 'number' ? it.basePrice : undefined,
+      customizationTotal:
+        typeof it.customizationTotal === 'number' ? it.customizationTotal : undefined,
+      quantity: Number(it.quantity ?? 1),
+      selectedCustomizations,
+      specialInstructions: it.specialInstructions ? String(it.specialInstructions) : undefined,
+      note: itemSummaryParts.filter(Boolean).join(' · '),
+      imageUrl: String(it.imageUrl ?? ''),
+      temperature:
+        it.temperature === 'Hot' || it.temperature === 'Cold' ? it.temperature : undefined,
+      milkOption:
+        it.milkOption === 'none' ||
+        it.milkOption === 'regular' ||
+        it.milkOption === 'coconut'
+          ? it.milkOption
+          : undefined,
+      milkExtraPrice:
+        typeof it.milkExtraPrice === 'number' ? it.milkExtraPrice : undefined,
+    };
+  });
+
+  const hasHistoricalDelivery =
+    data.orderType === 'delivery' || Boolean(data.deliveryLocation) || Boolean(data.mapsLink);
+
+  const rawNotes = data.notes
+    ? String(data.notes)
+    : data.orderNote
+      ? String(data.orderNote)
+      : undefined;
+  const cleanedOrderNote =
+    rawNotes === 'Pickup'
+      ? undefined
+      : rawNotes?.startsWith('Pickup · ')
+        ? rawNotes.slice('Pickup · '.length).trim() || undefined
+        : rawNotes;
 
   return {
     id,
     orderNumber: String(data.orderNumber ?? id.slice(0, 8).toUpperCase()),
-    orderType:
-      typeof data.notes === 'string' && data.notes.toLowerCase().startsWith('pickup')
-        ? 'pickup'
-        : 'delivery',
+    customerUid: data.customerUid ? String(data.customerUid) : undefined,
+    orderType: hasHistoricalDelivery ? 'delivery' : 'pickup',
     customerName: String(data.customerName ?? 'Guest'),
     customerPhone: String(data.customerContact ?? data.customerPhone ?? ''),
     deliveryLocation: data.deliveryLocation ? String(data.deliveryLocation) : undefined,
     mapsLink: data.mapsLink ? String(data.mapsLink) : undefined,
-    orderNote: data.notes
-      ? String(data.notes)
-      : data.orderNote
-        ? String(data.orderNote)
-        : undefined,
+    orderNote: cleanedOrderNote,
     items,
     total: Number(data.totalBill ?? data.total ?? 0),
     status: normalizedStatus,

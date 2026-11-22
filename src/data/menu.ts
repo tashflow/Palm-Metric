@@ -11,6 +11,10 @@ export interface StarterMenuItem {
   nameEn: string;
   price: number;
   supportsTemp?: boolean;
+  origin?: string;
+  originAr?: string;
+  country?: string;
+  countryAr?: string;
 }
 
 export const BUSINESS = {
@@ -37,6 +41,26 @@ export const CATEGORIES: StarterCategory[] = [
   { id: 'food', ar: 'المخبوزات والحلويات', en: 'Food' },
 ];
 
+export const LEGACY_PRODUCT_ID_ALIASES: Record<string, string> = {
+  'v60-ethiopia': 'v60-ethiopia-hot-cold',
+  'v60-colombia': 'v60-colombia-hot-cold',
+  'v60-yemen': 'v60-yemen-hot-cold',
+  'esp-flat-white': 'espresso-flat-white',
+  'esp-cappuccino': 'espresso-cappuccino',
+  'mat-palm-regular': 'matcha-palm-regular-milk',
+  'mat-palm-coconut': 'matcha-palm-coconut-milk',
+  'mat-iced': 'matcha-iced',
+  'spec-spanish-latte': 'specialty-iced-spanish-latte',
+  'spec-white-mocha': 'specialty-iced-white-mocha',
+  'cold-peach-tea': 'cold-iced-tea-peach',
+};
+
+export function canonicalizeProductId(productId: string): string {
+  const trimmed = productId.trim();
+  if (!trimmed) return '';
+  return LEGACY_PRODUCT_ID_ALIASES[trimmed] ?? trimmed;
+}
+
 export const MENU_ITEMS: StarterMenuItem[] = [
   // Coffee of the Day
   {
@@ -58,40 +82,52 @@ export const MENU_ITEMS: StarterMenuItem[] = [
 
   // V60
   {
-    id: 'v60-ethiopia',
+    id: 'v60-ethiopia-hot-cold',
     categoryId: 'v60',
     nameAr: 'إثيوبيا (حار / بارد)',
     nameEn: 'Ethiopia Hot / Cold',
     price: 12,
     supportsTemp: true,
+    origin: 'Ethiopia',
+    originAr: 'إثيوبيا',
+    country: 'Ethiopia',
+    countryAr: 'إثيوبيا',
   },
   {
-    id: 'v60-colombia',
+    id: 'v60-colombia-hot-cold',
     categoryId: 'v60',
     nameAr: 'كولومبيا (حار / بارد)',
     nameEn: 'Colombia Hot / Cold',
     price: 12,
     supportsTemp: true,
+    origin: 'Colombia',
+    originAr: 'كولومبيا',
+    country: 'Colombia',
+    countryAr: 'كولومبيا',
   },
   {
-    id: 'v60-yemen',
+    id: 'v60-yemen-hot-cold',
     categoryId: 'v60',
     nameAr: 'اليمن (حار / بارد)',
     nameEn: 'Yemen Hot / Cold',
     price: 15,
     supportsTemp: true,
+    origin: 'Yemen',
+    originAr: 'اليمن',
+    country: 'Yemen',
+    countryAr: 'اليمن',
   },
 
   // Espresso
   {
-    id: 'esp-flat-white',
+    id: 'espresso-flat-white',
     categoryId: 'espresso',
     nameAr: 'فلات وايت',
     nameEn: 'Flat White',
     price: 14,
   },
   {
-    id: 'esp-cappuccino',
+    id: 'espresso-cappuccino',
     categoryId: 'espresso',
     nameAr: 'كابتشينو',
     nameEn: 'Cappuccino',
@@ -100,21 +136,21 @@ export const MENU_ITEMS: StarterMenuItem[] = [
 
   // Matcha
   {
-    id: 'mat-palm-regular',
+    id: 'matcha-palm-regular-milk',
     categoryId: 'matcha',
     nameAr: 'بالم ماتشا (حليب عادي)',
     nameEn: 'Palm Matcha (Regular milk)',
     price: 19,
   },
   {
-    id: 'mat-palm-coconut',
+    id: 'matcha-palm-coconut-milk',
     categoryId: 'matcha',
     nameAr: 'بالم ماتشا (حليب جوز الهند)',
     nameEn: 'Palm Matcha (Coconut milk)',
     price: 19,
   },
   {
-    id: 'mat-iced',
+    id: 'matcha-iced',
     categoryId: 'matcha',
     nameAr: 'آيس ماتشا',
     nameEn: 'Iced Matcha',
@@ -123,14 +159,14 @@ export const MENU_ITEMS: StarterMenuItem[] = [
 
   // Specialty
   {
-    id: 'spec-spanish-latte',
+    id: 'specialty-iced-spanish-latte',
     categoryId: 'specialty',
     nameAr: 'آيس سبانش لاتيه',
     nameEn: 'Iced Spanish Latte',
     price: 16,
   },
   {
-    id: 'spec-white-mocha',
+    id: 'specialty-iced-white-mocha',
     categoryId: 'specialty',
     nameAr: 'آيس وايت موكا',
     nameEn: 'Iced White Mocha',
@@ -153,7 +189,7 @@ export const MENU_ITEMS: StarterMenuItem[] = [
     price: 10,
   },
   {
-    id: 'cold-peach-tea',
+    id: 'cold-iced-tea-peach',
     categoryId: 'cold-drinks',
     nameAr: 'آيس تي خوخ',
     nameEn: 'Iced Tea Peach',

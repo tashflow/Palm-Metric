@@ -8,6 +8,10 @@ export type TempChoice = 'hot' | 'cold';
 
 export type MediaType = 'image' | 'video';
 
+export type MenuSortOption = 'default' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc';
+
+export type AvailabilityFilter = 'all' | 'in-stock' | 'out-of-stock';
+
 export interface Billboard {
   id: string;
   title: string;
@@ -30,6 +34,13 @@ export interface Billboard {
   itemIds?: string[];
 }
 
+export interface CoffeeOptionsSettings {
+  milkSelectionEnabled: boolean;
+  coconutMilkExtraPrice: number;
+  hotColdSelectionEnabled: boolean;
+  updatedAtMs?: number;
+}
+
 export interface MenuItem {
   id: string;
   name: string;
@@ -47,7 +58,71 @@ export interface MenuItem {
   inStock: boolean;
   prepTime?: string;
   supportsTemp?: boolean;
+  supportsCustomization?: boolean;
+  allowMilkOption?: boolean;
+  coconutMilkPrice?: number;
+  allowTemperature?: boolean;
   order?: number;
+  origin?: string;
+  originAr?: string;
+  region?: string;
+  regionAr?: string;
+  country?: string;
+  countryAr?: string;
+  processingMethod?: string;
+  processingMethodAr?: string;
+  roastLevel?: string;
+  altitude?: string;
+  variety?: string;
+  tastingNotes?: string[];
+  tastingNotesAr?: string[];
+  brewMethods?: string[];
+  producer?: string;
+}
+
+export type CustomizationGroupType = 'single' | 'multiple';
+
+export interface CustomizationOption {
+  id: string;
+  name: string;
+  nameAr?: string;
+  additionalPrice: number;
+  enabled: boolean;
+  isDefault?: boolean;
+  displayOrder: number;
+}
+
+export interface CustomizationGroup {
+  id: string;
+  name: string;
+  nameAr?: string;
+  type: CustomizationGroupType;
+  required: boolean;
+  minSelections: number;
+  maxSelections: number;
+  displayOrder: number;
+  enabled: boolean;
+  options: CustomizationOption[];
+}
+
+export interface ProductCustomizationConfig {
+  productId: string;
+  enabled: boolean;
+  groups: CustomizationGroup[];
+  updatedAtMs?: number;
+  updatedBy?: string;
+  schemaVersion: number;
+  allowSpecialInstructions?: boolean;
+}
+
+export interface SelectedCustomizationItem {
+  groupId: string;
+  groupName: string;
+  groupNameAr?: string;
+  optionId: string;
+  optionName: string;
+  optionNameAr?: string;
+  additionalPrice: number;
 }
 
 export interface CartItem {
@@ -57,6 +132,10 @@ export interface CartItem {
   nameAr?: string;
   nameEn?: string;
   price: number;
+  basePrice?: number;
+  customizationTotal?: number;
+  customizations?: SelectedCustomizationItem[];
+  customizationUpdatedAtMs?: number;
   imageUrl: string;
   quantity: number;
   note: string;
@@ -65,18 +144,30 @@ export interface CartItem {
 
 export type OrderStatus = 'Pending' | 'Preparing' | 'Ready' | 'Completed' | 'Cancelled';
 
+export type LegacyMilkOption = 'none' | 'regular' | 'coconut';
+export type LegacyTemperatureOption = 'Hot' | 'Cold';
+
 export interface OrderLineItem {
   itemId: string;
   name: string;
+  nameAr?: string;
   price: number;
+  basePrice?: number;
+  customizationTotal?: number;
   quantity: number;
+  selectedCustomizations?: SelectedCustomizationItem[];
+  specialInstructions?: string;
   note: string;
   imageUrl: string;
+  temperature?: LegacyTemperatureOption;
+  milkOption?: LegacyMilkOption;
+  milkExtraPrice?: number;
 }
 
 export interface Order {
   id: string;
   orderNumber: string;
+  customerUid?: string;
   orderType?: OrderType;
   customerName: string;
   customerPhone: string;
@@ -84,7 +175,11 @@ export interface Order {
   mapsLink?: string;
   orderNote?: string;
   items: OrderLineItem[];
+  subtotal?: number;
   total: number;
+  currency?: 'SAR';
+  pricingVersion?: number;
+  idempotentReplay?: boolean;
   status: OrderStatus;
   createdAtMs?: number;
   updatedAtMs?: number;
@@ -121,6 +216,7 @@ export interface StoreSettings {
   heroTitleAr?: string;
   heroSubtitle?: string;
   heroSubtitleAr?: string;
+  coffeeOptions?: CoffeeOptionsSettings;
 }
 
 export type ReportType = 'order' | 'feedback' | 'customer_signup' | 'issue';

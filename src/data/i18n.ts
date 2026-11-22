@@ -11,8 +11,34 @@ export const COPY: Record<
     navLogin: string;
     langSwitch: string;
     heroGreeting: string;
+    heroEyebrow: string;
+    heroHeadline: string;
+    heroExploreBtn: string;
+    heroStoryBtn: string;
     heroPrepBadge: string;
     heroVisitBtn: string;
+    shortcutAllMenu: string;
+    shortcutV60: string;
+    shortcutSeasonal: string;
+    shortcutContact: string;
+    featuredKicker: string;
+    featuredTitle: string;
+    featuredSubtitle: string;
+    viewDetailsBtn: string;
+    categoriesKicker: string;
+    categoriesTitle: string;
+    categoriesSubtitle: string;
+    categoryItemsSuffix: string;
+    fullMenuTitle: string;
+    fullMenuSubtitle: string;
+    storyKicker: string;
+    storyTitle: string;
+    storyBody: string;
+    storyHighlight1: string;
+    storyHighlight2: string;
+    storyHighlight3: string;
+    storyContactBtn: string;
+    navCart: string;
     allCategories: string;
     offersTab: string;
     specialOfferBadge: string;
@@ -21,6 +47,73 @@ export const COPY: Record<
     seasonalKicker: string;
     seasonalExploreBtn: string;
     seasonalMenuBtn: string;
+    menuSearchPlaceholder: string;
+    clearSearchLabel: string;
+    filtersBtn: string;
+    clearAllFiltersBtn: string;
+    sortLabel: string;
+    sortDefault: string;
+    sortPriceAsc: string;
+    sortPriceDesc: string;
+    sortNameAsc: string;
+    sortNameDesc: string;
+    filterOriginLabel: string;
+    filterProcessLabel: string;
+    filterRoastLabel: string;
+    filterPriceLabel: string;
+    filterMinPricePlaceholder: string;
+    filterMaxPricePlaceholder: string;
+    filterAvailabilityLabel: string;
+    availabilityAll: string;
+    availabilityInStock: string;
+    availabilityOutOfStock: string;
+    resultsCountLabel: string;
+    emptySearchTitle: string;
+    emptySearchDesc: string;
+    inStockLabel: string;
+    originLabel: string;
+    regionLabel: string;
+    processLabel: string;
+    roastLabel: string;
+    altitudeLabel: string;
+    varietyLabel: string;
+    tastingNotesLabel: string;
+    brewMethodsLabel: string;
+    producerLabel: string;
+    coffeeProfileHeading: string;
+    infoComingSoon: string;
+    customizationsHeading: string;
+    customizationRequiredBadge: string;
+    customizationOptionalBadge: string;
+    customizationLoading: string;
+    customizationUnavailableNotice: string;
+    customizationSelectOne: string;
+    customizationSelectMin: string;
+    customizationSelectMax: string;
+    customizationSelectRange: string;
+    customizationErrRequired: string;
+    customizationErrMin: string;
+    customizationErrMax: string;
+    customizationErrUnavailable: string;
+    basePriceLabel: string;
+    addonsPriceLabel: string;
+    estimatedTotalLabel: string;
+    freeOptionLabel: string;
+    specialInstructionsLabel: string;
+    cartReviewRequiredTitle: string;
+    cartReviewPriceChanged: string;
+    cartReviewOptionDisabled: string;
+    cartReviewItemUnavailable: string;
+    cartReviewConfigDisabled: string;
+    cartReviewRefreshBtn: string;
+    cartReviewSubmitBlocked: string;
+    payAtBranchBadge: string;
+    trackPermissionDenied: string;
+    errSessionRequired: string;
+    errBackendUnavailable: string;
+    errBackendValidationFailed: string;
+    errOutOfStockCheckout: string;
+    serverVerifiedNote: string;
     addBtn: string;
     customizeBtn: string;
     outOfStockLabel: string;
@@ -153,8 +246,34 @@ export const COPY: Record<
     navLogin: 'دخول',
     langSwitch: 'EN',
     heroGreeting: 'أهلاً بك في بالم مترك',
-    heroPrepBadge: 'التحضير خلال ١٠–١٥ دقيقة',
+    heroEyebrow: 'الاستلام من الفرع · قهوة مختصة',
+    heroHeadline: 'لحظات قهوة موزونة بدقة',
+    heroExploreBtn: 'استكشف القهوة',
+    heroStoryBtn: 'قصتنا',
+    heroPrepBadge: 'جاهز للاستلام خلال ١٠–١٥ دقيقة',
     heroVisitBtn: 'موقع الفرع والتواصل',
+    shortcutAllMenu: 'تصفح القائمة',
+    shortcutV60: 'قهوة V60',
+    shortcutSeasonal: 'إضاءة الموسم',
+    shortcutContact: 'تواصل معنا',
+    featuredKicker: 'اختيارات بالم مترك',
+    featuredTitle: 'القهوة المميزة',
+    featuredSubtitle: 'تشكيلة مختارة من مشروبات بالم مترك والمخبوزات الطازجة للاستلام السريع من الفرع',
+    viewDetailsBtn: 'التفاصيل',
+    categoriesKicker: 'أقسام القائمة',
+    categoriesTitle: 'تصفح حسب الفئة',
+    categoriesSubtitle: 'سبع فئات متكاملة من قهوة اليوم و V60 والإسبريسو إلى الماتشا والمخبوزات',
+    categoryItemsSuffix: 'أصناف',
+    fullMenuTitle: 'القائمة الكاملة',
+    fullMenuSubtitle: 'اختر مشروبك أو مخبوزاتك المفضلة وخصص درجة الحرارة والملاحظات قبل الإضافة للسلة',
+    storyKicker: 'عن بالم مترك',
+    storyTitle: 'وجهة للقهوة المختصة والماتشا الأصيلة',
+    storyBody: 'في بالم مترك نركز على دقة التحضير وجودة المكونات في كل كوب — من تقطير V60 وإسبريسو متوازن إلى الماتشا والمخبوزات الطازجة، تُحضّر كل طلبية عند الطلب لتكون جاهزة للاستلام من الفرع.',
+    storyHighlight1: 'تحضير طازج عند الطلب',
+    storyHighlight2: 'استلام سريع خلال ١٠–١٥ دقيقة',
+    storyHighlight3: 'تقطير V60 · إسبريسو · ماتشا',
+    storyContactBtn: 'زيارة الفرع والتواصل',
+    navCart: 'السلة',
     allCategories: 'الكل',
     offersTab: 'العروض',
     specialOfferBadge: 'عرض خاص',
@@ -163,6 +282,73 @@ export const COPY: Record<
     seasonalKicker: 'اختيار الموسم',
     seasonalExploreBtn: 'استكشاف القسم',
     seasonalMenuBtn: 'عرض القائمة',
+    menuSearchPlaceholder: 'ابحث بالاسم أو المصدر أو المعالجة أو الإيحاءات...',
+    clearSearchLabel: 'مسح البحث',
+    filtersBtn: 'الفلاتر',
+    clearAllFiltersBtn: 'إعادة ضبط الفلاتر',
+    sortLabel: 'ترتيب',
+    sortDefault: 'الموصى به (الافتراضي)',
+    sortPriceAsc: 'السعر: من الأقل إلى الأعلى',
+    sortPriceDesc: 'السعر: من الأعلى إلى الأقل',
+    sortNameAsc: 'الاسم: أ – ي',
+    sortNameDesc: 'الاسم: ي – أ',
+    filterOriginLabel: 'المصدر / الدولة',
+    filterProcessLabel: 'طريقة المعالجة',
+    filterRoastLabel: 'درجة التحميص',
+    filterPriceLabel: 'نطاق السعر (ريال)',
+    filterMinPricePlaceholder: 'الحد الأدنى',
+    filterMaxPricePlaceholder: 'الحد الأقصى',
+    filterAvailabilityLabel: 'التوفر',
+    availabilityAll: 'الكل',
+    availabilityInStock: 'متوفر',
+    availabilityOutOfStock: 'غير متوفر',
+    resultsCountLabel: 'نتيجة',
+    emptySearchTitle: 'لا توجد أصناف مطابقة للبحث أو الفلاتر',
+    emptySearchDesc: 'جرّب تغيير كلمات البحث أو إزالة بعض الفلاتر لاستعراض جميع أصناف بالم مترك.',
+    inStockLabel: 'متوفر',
+    originLabel: 'المصدر',
+    regionLabel: 'المنطقة',
+    processLabel: 'المعالجة',
+    roastLabel: 'التحميص',
+    altitudeLabel: 'الارتفاع',
+    varietyLabel: 'السلالة',
+    tastingNotesLabel: 'الإيحاءات',
+    brewMethodsLabel: 'طرق التحضير',
+    producerLabel: 'المزرعة / المنتج',
+    coffeeProfileHeading: 'ملف القهوة والمواصفات',
+    infoComingSoon: 'ستتوفر التفاصيل قريباً',
+    customizationsHeading: 'تخصيص المشروب أو الصنف',
+    customizationRequiredBadge: 'إجباري',
+    customizationOptionalBadge: 'اختياري',
+    customizationLoading: 'جاري تحميل خيارات التخصيص...',
+    customizationUnavailableNotice: 'خيارات التخصيص الإضافية غير متاحة حالياً — يمكنك إضافة الصنف بالسعر الأساسي.',
+    customizationSelectOne: 'اختر خياراً واحداً',
+    customizationSelectMin: 'اختر على الأقل',
+    customizationSelectMax: 'حد أقصى',
+    customizationSelectRange: 'اختر من {min} إلى {max}',
+    customizationErrRequired: 'يرجى اختيار أحد الخيارات المطلوبة',
+    customizationErrMin: 'يرجى استيفاء الحد الأدنى للاختيارات ({min})',
+    customizationErrMax: 'يمكنك اختيار {max} كحد أقصى في هذه المجموعة',
+    customizationErrUnavailable: 'بعض الخيارات في هذه المجموعة غير متوفرة حالياً',
+    basePriceLabel: 'السعر الأساسي',
+    addonsPriceLabel: 'إضافات التخصيص',
+    estimatedTotalLabel: 'الإجمالي التقديري',
+    freeOptionLabel: 'مجاني',
+    specialInstructionsLabel: 'ملاحظات التحضير (اختياري)',
+    cartReviewRequiredTitle: 'تنبيه: تغيرت إعدادات أو أسعار هذا الصنف في القائمة',
+    cartReviewPriceChanged: 'تم تحديث السعر في القائمة من {old} إلى {new} ﷼ — يرجى المراجعة قبل إرسال الطلب.',
+    cartReviewOptionDisabled: 'أحد الخيارات المحددة لم يعد متاحاً لدى المتجر.',
+    cartReviewItemUnavailable: 'هذا الصنف غير متوفر حالياً في القائمة.',
+    cartReviewConfigDisabled: 'تم إيقاف خيارات التخصيص المخصصة لهذا الصنف.',
+    cartReviewRefreshBtn: 'تحديث للسعر الحالي',
+    cartReviewSubmitBlocked: 'يرجى مراجعة أو إزالة الأصناف المتغيرة في السلة قبل تأكيد الطلب.',
+    payAtBranchBadge: 'الدفع عند الاستلام من الفرع',
+    trackPermissionDenied: 'يمكنك تتبع الطلبات التي تم إنشاؤها من جلستك الحالية فقط.',
+    errSessionRequired: 'تعذر بدء جلسة ضيف آمنة مع Firebase. يرجى المحاولة مرة أخرى.',
+    errBackendUnavailable: 'خدمة التحقق من الطلبات غير متوفرة حالياً. يرجى المحاولة بعد لحظات — لم يتم إرسال طلبك بعد.',
+    errBackendValidationFailed: 'تعذر التحقق من صحة الطلب أو توفر الأصناف الحالية. يرجى مراجعة السلة والمحاولة مرة أخرى.',
+    errOutOfStockCheckout: 'أحد الأصناف أو خيارات التخصيص في سلتك لم يعد متوفراً. يرجى تحديث السلة.',
+    serverVerifiedNote: 'يتم التحقق من الأسعار وتأكيد الطلب تلقائياً عبر الخادم الآمن بالريال السعودي',
     addBtn: 'إضافة',
     customizeBtn: 'تخصيص',
     outOfStockLabel: 'غير متوفر حالياً',
@@ -174,31 +360,31 @@ export const COPY: Record<
     itemPlural: 'منتجات',
     viewCartCheckout: 'عرض السلة وإتمام الطلب',
     backToMenu: 'العودة للقائمة',
-    checkoutTitle: 'إتمام الطلب',
+    checkoutTitle: 'إتمام طلب الاستلام',
     estimatedTimeTitle: 'الوقت المتوقع للتحضير',
     estimatedTimeVal: '١٠–١٥ دقيقة',
     orderTypeTitle: 'طريقة استلام الطلب',
-    pickupLabel: 'استلام (Pickup)',
+    pickupLabel: 'استلام من الفرع (Pickup)',
     deliveryLabel: 'توصيل (Delivery)',
     itemsInOrder: 'المنتجات المختارة',
     emptyCartTitle: 'سلتك فارغة حالياً',
     emptyCartDesc: 'أضف مشروبك المفضل أو المخبوزات من القائمة للبدء.',
     browseMenuBtn: 'تصفح القائمة',
-    pickupNoticeTitle: 'تأكيد الاستلام من الفرع',
-    pickupNoticeDesc: 'سيتم حفظ طلبك في لوحة المتابعة وتأكيده عبر واتساب للاستلام خلال ١٠–١٥ دقيقة.',
+    pickupNoticeTitle: 'الاستلام من فرع بالم مترك',
+    pickupNoticeDesc: 'يُحفظ طلبك مباشرة في لوحة التحضير ويُرسل ملخصه عبر واتساب للاستلام خلال ١٠–١٥ دقيقة.',
     savedDeliveryTitle: 'تم تعبئة بياناتك من حسابك',
     editInAccount: 'تعديل الحساب',
-    customerDetailsTitle: 'بيانات العميل وموقع التوصيل',
+    customerDetailsTitle: 'بيانات العميل للاستلام',
     nameLabel: 'اسم العميل',
     namePlaceholder: 'مثال: محمد العتيبي',
     phoneLabel: 'رقم الجوال',
     phonePlaceholder: '05XXXXXXXX',
-    deliveryLocationLabel: 'موقع التوصيل / العنوان',
-    deliveryLocationPlaceholder: 'الحي، الشارع، رقم المبنى أو ملاحظة الوصول',
+    deliveryLocationLabel: 'الموقع / العنوان المحفوظ',
+    deliveryLocationPlaceholder: 'ملاحظة الموقع',
     manualMapsLabel: 'أو الصق رابط خرائط جوجل يدوياً (اختياري)',
     manualMapsPlaceholder: 'https://maps.google.com/?q=...',
-    notesLabel: 'ملاحظات إضافية (اختياري)',
-    notesPlaceholder: 'مثال: سكر أقل، ثلج خفيف، أو تعليمات التوصيل...',
+    notesLabel: 'ملاحظات الطلب (اختياري)',
+    notesPlaceholder: 'مثال: سكر أقل، ثلج خفيف، أو وقت الوصول...',
     getCurrentLocationBtn: 'تحديد موقعي الحالي (GPS)',
     locatingBtn: 'جاري تحديد موقعك...',
     locationCaptured: 'تم توليد رابط خرائط جوجل بنجاح',
@@ -294,8 +480,34 @@ export const COPY: Record<
     navLogin: 'Login',
     langSwitch: 'عربي',
     heroGreeting: 'Welcome to Palm Metric',
-    heroPrepBadge: 'Ready in 10–15 min',
+    heroEyebrow: 'Branch Pickup · Specialty Coffee',
+    heroHeadline: 'Measured Moments in Every Pour',
+    heroExploreBtn: 'Explore Coffee',
+    heroStoryBtn: 'Our Story',
+    heroPrepBadge: 'Ready for pickup in 10–15 min',
     heroVisitBtn: 'Location & Info',
+    shortcutAllMenu: 'Explore Menu',
+    shortcutV60: 'V60 Coffee',
+    shortcutSeasonal: 'Seasonal Highlights',
+    shortcutContact: 'Contact Palm Metric',
+    featuredKicker: 'Curated Selection',
+    featuredTitle: 'Featured Coffee',
+    featuredSubtitle: 'Signature pours and fresh bakes from the Palm Metric bar, prepared to order for branch pickup',
+    viewDetailsBtn: 'Details',
+    categoriesKicker: 'Menu Categories',
+    categoriesTitle: 'Browse by Category',
+    categoriesSubtitle: 'Seven distinct collections spanning Coffee of the Day, V60 pour-over, espresso, matcha, and fresh food',
+    categoryItemsSuffix: 'items',
+    fullMenuTitle: 'The Complete Menu',
+    fullMenuSubtitle: 'Filter by category, select hot or cold, and customize notes before adding to your pickup bag',
+    storyKicker: 'Our Philosophy',
+    storyTitle: 'A Destination for Measured Specialty Coffee',
+    storyBody: 'At Palm Metric, craft begins with precision — balancing clean V60 filter brews, structured espresso, ceremonial matcha, and warm bakery pairings prepared to order for seamless branch pickup.',
+    storyHighlight1: 'Crafted Fresh to Order',
+    storyHighlight2: 'Ready for Pickup in 10–15 Min',
+    storyHighlight3: 'V60 · Espresso · Matcha',
+    storyContactBtn: 'Visit & Contact Branch',
+    navCart: 'Cart',
     allCategories: 'All',
     offersTab: 'Offers',
     specialOfferBadge: 'Offer',
@@ -304,6 +516,73 @@ export const COPY: Record<
     seasonalKicker: 'Seasonal Spotlight',
     seasonalExploreBtn: 'Explore Category',
     seasonalMenuBtn: 'Browse Selection',
+    menuSearchPlaceholder: 'Search coffee, Arabic name, origin, process, or notes...',
+    clearSearchLabel: 'Clear search',
+    filtersBtn: 'Filters',
+    clearAllFiltersBtn: 'Clear All',
+    sortLabel: 'Sort',
+    sortDefault: 'Recommended (Default)',
+    sortPriceAsc: 'Price: Low to High',
+    sortPriceDesc: 'Price: High to Low',
+    sortNameAsc: 'Name: A–Z',
+    sortNameDesc: 'Name: Z–A',
+    filterOriginLabel: 'Origin',
+    filterProcessLabel: 'Processing Method',
+    filterRoastLabel: 'Roast Level',
+    filterPriceLabel: 'Price Range (SAR)',
+    filterMinPricePlaceholder: 'Min',
+    filterMaxPricePlaceholder: 'Max',
+    filterAvailabilityLabel: 'Availability',
+    availabilityAll: 'All',
+    availabilityInStock: 'In Stock',
+    availabilityOutOfStock: 'Out of Stock',
+    resultsCountLabel: 'results',
+    emptySearchTitle: 'No matching coffee or items found',
+    emptySearchDesc: 'Try adjusting your search keywords or clearing active filters to explore the full menu.',
+    inStockLabel: 'In Stock',
+    originLabel: 'Origin',
+    regionLabel: 'Region',
+    processLabel: 'Processing Method',
+    roastLabel: 'Roast Level',
+    altitudeLabel: 'Altitude',
+    varietyLabel: 'Variety',
+    tastingNotesLabel: 'Tasting Notes',
+    brewMethodsLabel: 'Brew Methods',
+    producerLabel: 'Producer',
+    coffeeProfileHeading: 'Coffee Profile & Specifications',
+    infoComingSoon: 'Information coming soon',
+    customizationsHeading: 'Customize Your Order',
+    customizationRequiredBadge: 'Required',
+    customizationOptionalBadge: 'Optional',
+    customizationLoading: 'Loading customization options...',
+    customizationUnavailableNotice: 'Additional customization options are temporarily unavailable — base item ordering remains active.',
+    customizationSelectOne: 'Choose 1',
+    customizationSelectMin: 'Select at least',
+    customizationSelectMax: 'Up to',
+    customizationSelectRange: 'Choose {min}–{max}',
+    customizationErrRequired: 'Please select an option to continue',
+    customizationErrMin: 'Please select at least {min} option(s)',
+    customizationErrMax: 'You can select up to {max} option(s)',
+    customizationErrUnavailable: 'This required group currently has no enabled options',
+    basePriceLabel: 'Base Price',
+    addonsPriceLabel: 'Customizations',
+    estimatedTotalLabel: 'Estimated Total',
+    freeOptionLabel: 'Included',
+    specialInstructionsLabel: 'Special Instructions (Optional)',
+    cartReviewRequiredTitle: 'Review needed: menu configuration or price updated',
+    cartReviewPriceChanged: 'Updated in menu from {old} to {new} SAR — please review before placing your order.',
+    cartReviewOptionDisabled: 'One of your selected options is no longer active in the menu.',
+    cartReviewItemUnavailable: 'This item is currently unavailable in the menu.',
+    cartReviewConfigDisabled: 'Customizations for this item were disabled by the store.',
+    cartReviewRefreshBtn: 'Update to Live Price',
+    cartReviewSubmitBlocked: 'Please review or remove updated items in your cart before placing the order.',
+    payAtBranchBadge: 'Pay upon pickup at branch',
+    trackPermissionDenied: 'You can only view orders placed from your active guest or signed-in session.',
+    errSessionRequired: 'Could not start a secure guest session with Firebase. Please try again.',
+    errBackendUnavailable: 'The secure order verification service is currently unavailable. Your cart is preserved — please try again shortly.',
+    errBackendValidationFailed: 'Could not verify current catalog prices or selections for this order. Please review your cart and try again.',
+    errOutOfStockCheckout: 'One or more items or customization options in your cart are currently unavailable.',
+    serverVerifiedNote: 'Prices and pickup availability are verified securely on the server in SAR',
     addBtn: 'Add',
     customizeBtn: 'Customize',
     outOfStockLabel: 'Out of Stock',
@@ -315,31 +594,31 @@ export const COPY: Record<
     itemPlural: 'items',
     viewCartCheckout: 'View Cart & Checkout',
     backToMenu: 'Back to Menu',
-    checkoutTitle: 'Checkout',
+    checkoutTitle: 'Pickup Checkout',
     estimatedTimeTitle: 'Estimated preparation time',
     estimatedTimeVal: '10–15 min',
     orderTypeTitle: 'Order Type',
-    pickupLabel: 'Pickup (استلام)',
+    pickupLabel: 'Branch Pickup (استلام)',
     deliveryLabel: 'Delivery (توصيل)',
     itemsInOrder: 'Your Items',
     emptyCartTitle: 'Your cart is empty',
     emptyCartDesc: 'Add your favorite coffee, matcha, or pastry from the menu to get started.',
     browseMenuBtn: 'Browse Menu',
-    pickupNoticeTitle: 'Pickup Confirmation',
+    pickupNoticeTitle: 'Branch Pickup Order',
     pickupNoticeDesc: 'Your order is saved to the live dashboard and sent via WhatsApp for pickup in 10–15 min.',
     savedDeliveryTitle: 'Pre-filled from your account',
     editInAccount: 'View Account',
-    customerDetailsTitle: 'Customer & Delivery Details',
+    customerDetailsTitle: 'Customer Details for Pickup',
     nameLabel: 'Customer Name',
     namePlaceholder: 'e.g., Sarah Al-Harbi',
     phoneLabel: 'Mobile Number',
     phonePlaceholder: '05XXXXXXXX',
-    deliveryLocationLabel: 'Delivery Location / Address',
-    deliveryLocationPlaceholder: 'District, street, building, or drop-off note',
+    deliveryLocationLabel: 'Saved Location / Note',
+    deliveryLocationPlaceholder: 'Saved note',
     manualMapsLabel: 'Or paste a Google Maps link manually (Optional)',
     manualMapsPlaceholder: 'https://maps.google.com/?q=...',
-    notesLabel: 'Notes (Optional)',
-    notesPlaceholder: 'Less sugar, light ice, gate code, etc.',
+    notesLabel: 'Order Notes (Optional)',
+    notesPlaceholder: 'Less sugar, light ice, pickup arrival note...',
     getCurrentLocationBtn: 'Get Current Location',
     locatingBtn: 'Getting your location...',
     locationCaptured: 'Google Maps link generated',

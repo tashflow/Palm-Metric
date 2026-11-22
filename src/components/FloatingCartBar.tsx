@@ -1,5 +1,6 @@
 import { ShoppingBag } from 'lucide-react';
 import { COPY } from '../data/i18n';
+import { formatPrice } from '../lib/format';
 import type { Language } from '../types';
 
 interface FloatingCartBarProps {
@@ -19,7 +20,7 @@ export function FloatingCartBar({
   const t = COPY[lang];
 
   return (
-    <div className="fixed bottom-4 inset-x-4 z-40 mx-auto max-w-xl">
+    <div className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] inset-x-4 z-40 mx-auto max-w-xl">
       <button
         type="button"
         onClick={onOpenCheckout}
@@ -41,7 +42,7 @@ export function FloatingCartBar({
 
         <div className="flex items-center gap-2 shrink-0">
           <span className="font-en text-base sm:text-lg font-extrabold text-[#142A20] tabular-nums">
-            {total} {t.currency}
+            {formatPrice(total)} {t.currency}
           </span>
           <ShoppingBag className="h-5 w-5 text-[#142A20]" />
         </div>

@@ -17,6 +17,7 @@ import {
   query,
   where,
 } from 'firebase/firestore';
+import { getFunctions } from 'firebase/functions';
 import { getDownloadURL, getStorage, ref } from 'firebase/storage';
 
 // Connected to the same Firebase project ("palm-metric-app") used by the Palm Metric Admin App
@@ -35,6 +36,9 @@ const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
 export const auth = getAuth(app);
 export const storage = getStorage(app);
+const functionsRegion =
+  import.meta.env?.VITE_FIREBASE_FUNCTIONS_REGION || 'us-central1';
+export const functions = getFunctions(app, functionsRegion);
 export const activeProjectId = firebaseConfig.projectId;
 
 export enum OperationType {
@@ -110,15 +114,41 @@ export async function signInWithGoogle(): Promise<User> {
   return cred.user;
 }
 
-export async function signInAsGuest(): Promise<User | null> {
-  if (auth.currentUser) return auth.currentUser;
-  try {
-    const cred = await signInAnonymously(auth);
-    return cred.user;
-  } catch (err) {
-    console.warn('Anonymous guest auth unavailable in Firebase project:', err);
-    return null;
+let pendingGuestSignIn: Promise<{ user: User | null; errorCode?: string }> | null = null;
+
+export async function ensureGuestFirebaseSession(): Promise<{
+  user: User | null;
+  errorCode?: string;
+}> {
+  if (auth.currentUser) {
+    return { user: auth.currentUser };
   }
+  if (pendingGuestSignIn) {
+    return pendingGuestSignIn;
+  }
+
+  pendingGuestSignIn = (async () => {
+    try {
+      const cred = await signInAnonymously(auth);
+      return { user: cred.user };
+    } catch (err) {
+      const code =
+        typeof err === 'object' && err !== null && 'code' in err
+          ? String((err as { code?: unknown }).code)
+          : 'auth/unknown';
+      console.warn('Anonymous guest auth unavailable in Firebase project:', code, err);
+      return { user: null, errorCode: code };
+    } finally {
+      pendingGuestSignIn = null;
+    }
+  })();
+
+  return pendingGuestSignIn;
+}
+
+export async function signInAsGuest(): Promise<User | null> {
+  const result = await ensureGuestFirebaseSession();
+  return result.user;
 }
 
 export async function signOutFirebase(): Promise<void> {

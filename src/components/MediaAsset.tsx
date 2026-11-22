@@ -35,6 +35,7 @@ export function StorageImage({
       src.startsWith('https://') ||
       src.startsWith('http://') ||
       src.startsWith('/') ||
+      src.startsWith('./') ||
       src.startsWith('data:') ||
       src.startsWith('blob:')
     ) {

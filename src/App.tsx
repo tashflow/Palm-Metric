@@ -7,12 +7,25 @@ import { FloatingCartBar } from './components/FloatingCartBar';
 import { MapsApiWrapper } from './components/GoogleMapsLocation';
 import { Header } from './components/Header';
 import { InfoPage } from './components/InfoPage';
-import { MenuItemModal } from './components/MenuItemModal';
+import { MenuItemModal, type AddToCartCustomizationPayload } from './components/MenuItemModal';
 import { MenuPage } from './components/MenuPage';
 import { OrderTrackerPage } from './components/OrderTrackerPage';
 import { COPY } from './data/i18n';
+import { canonicalizeProductId } from './data/menu';
 import { motion } from 'motion/react';
-import { activeProjectId, auth, signInAsGuest, signInWithGoogle } from './lib/firebase';
+import { migrateLegacyCartItems } from './lib/cart';
+import {
+  fetchProductCustomizationOnce,
+  getCachedProductCustomization,
+  hasCachedRequiredCustomization,
+} from './lib/customizationSync';
+import {
+  activeProjectId,
+  auth,
+  ensureGuestFirebaseSession,
+  signInWithGoogle,
+} from './lib/firebase';
+import { buildCartKey, getItemTitle, roundCurrency } from './lib/format';
 import {
   seedPalmMetricMenuForAdmin,
   subscribeBillboards,
@@ -94,7 +107,7 @@ export default function App() {
   const [cart, setCart] = useState<CartItem[]>(() => {
     try {
       const saved = localStorage.getItem(CART_KEY);
-      return saved ? (JSON.parse(saved) as CartItem[]) : [];
+      return saved ? migrateLegacyCartItems(JSON.parse(saved) as CartItem[]) : [];
     } catch {
       return [];
     }
@@ -153,7 +166,7 @@ export default function App() {
       setCurrentFirebaseUser(user);
       if (!user && !guestAuthAttemptedRef.current) {
         guestAuthAttemptedRef.current = true;
-        void signInAsGuest();
+        void ensureGuestFirebaseSession();
       }
     });
     return () => unsubAuth();
@@ -320,11 +333,15 @@ export default function App() {
     quantity: number,
     note: string,
     temp?: TempChoice,
+    customizationPayload?: AddToCartCustomizationPayload,
   ) => {
     if (!item.inStock) return;
     const cleanNote = note.trim();
-    const baseKey = temp ? `${item.id}::${temp}` : item.id;
-    const cartKey = `${baseKey}::${cleanNote.toLowerCase()}`;
+    const selectedCustomizations = customizationPayload?.selectedItems;
+    const cartKey = buildCartKey(item.id, cleanNote, temp, selectedCustomizations);
+    const unitPrice = customizationPayload
+      ? roundCurrency(customizationPayload.unitPrice)
+      : roundCurrency(item.price);
 
     setCart((prev) => {
       const existing = prev.find((c) => c.cartKey === cartKey);
@@ -343,7 +360,16 @@ export default function App() {
           name: item.name,
           nameAr: item.nameAr,
           nameEn: item.nameEn,
-          price: item.price,
+          price: unitPrice,
+          basePrice: customizationPayload
+            ? customizationPayload.basePrice
+            : roundCurrency(item.price),
+          customizationTotal: customizationPayload?.optionsTotal,
+          customizations:
+            selectedCustomizations && selectedCustomizations.length > 0
+              ? selectedCustomizations
+              : undefined,
+          customizationUpdatedAtMs: customizationPayload?.configUpdatedAtMs,
           imageUrl: item.imageUrl,
           quantity,
           note: cleanNote,
@@ -352,8 +378,33 @@ export default function App() {
       ];
     });
 
-    const label = lang === 'ar' ? item.nameAr || item.name : item.nameEn || item.name;
-    setToastMessage(`${quantity}x ${label}`);
+    setToastMessage(`${quantity}x ${getItemTitle(item, lang)}`);
+  };
+
+  const handleQuickAdd = async (item: MenuItem, temp?: TempChoice) => {
+    if (!item.inStock) return;
+
+    const cached = getCachedProductCustomization(item.id);
+    if (cached) {
+      if (hasCachedRequiredCustomization(item.id)) {
+        setSelectedItem(item);
+        return;
+      }
+      addToCart(item, 1, '', temp);
+      return;
+    }
+
+    const fetched = await fetchProductCustomizationOnce(item.id);
+    if (
+      fetched.status === 'ready' &&
+      fetched.config?.enabled &&
+      fetched.config.groups.some((g) => g.enabled && g.required)
+    ) {
+      setSelectedItem(item);
+      return;
+    }
+
+    addToCart(item, 1, '', temp);
   };
 
   const handleUpdateQty = (cartKey: string, delta: number) => {
@@ -366,6 +417,28 @@ export default function App() {
 
   const handleUpdateNote = (cartKey: string, note: string) => {
     setCart((prev) => prev.map((c) => (c.cartKey === cartKey ? { ...c, note } : c)));
+  };
+
+  const handleRefreshCartItemPrice = (
+    cartKey: string,
+    newUnitPrice: number,
+    newBasePrice?: number,
+  ) => {
+    setCart((prev) =>
+      prev.map((c) => {
+        if (c.cartKey !== cartKey) return c;
+        const safeUnit = roundCurrency(newUnitPrice);
+        const safeBase =
+          typeof newBasePrice === 'number' && Number.isFinite(newBasePrice)
+            ? roundCurrency(newBasePrice)
+            : c.basePrice;
+        return {
+          ...c,
+          price: safeUnit,
+          ...(safeBase !== undefined ? { basePrice: safeBase } : {}),
+        };
+      }),
+    );
   };
 
   const handleOrderPlaced = (
@@ -521,17 +594,72 @@ export default function App() {
   };
 
   const handleReorder = (items: OrderLineItem[]) => {
-    setCart(
-      items.map((i) => ({
-        cartKey: `${i.itemId}::${(i.note || '').toLowerCase()}`,
-        itemId: i.itemId,
-        name: i.name,
-        price: i.price,
-        imageUrl: i.imageUrl,
-        quantity: i.quantity,
-        note: i.note,
-      })),
-    );
+    const mergedMap = new Map<string, CartItem>();
+
+    items.forEach((line) => {
+      const canonicalId = canonicalizeProductId(line.itemId);
+      const catalogMatch = menuItems.find((m) => m.id === canonicalId || m.id === line.itemId);
+      const rawNote = (line.specialInstructions ?? line.note ?? '').trim();
+      let parsedTemp: TempChoice | undefined =
+        line.temperature === 'Hot'
+          ? 'hot'
+          : line.temperature === 'Cold'
+            ? 'cold'
+            : undefined;
+      let cleanNote = line.specialInstructions ? rawNote : rawNote;
+
+      if (!line.specialInstructions) {
+        if (rawNote.startsWith('Hot · ')) {
+          parsedTemp = 'hot';
+          cleanNote = rawNote.slice(6).trim();
+        } else if (rawNote === 'Hot') {
+          parsedTemp = 'hot';
+          cleanNote = '';
+        } else if (rawNote.startsWith('Cold · ')) {
+          parsedTemp = 'cold';
+          cleanNote = rawNote.slice(7).trim();
+        } else if (rawNote === 'Cold') {
+          parsedTemp = 'cold';
+          cleanNote = '';
+        }
+      }
+
+      const customizations =
+        Array.isArray(line.selectedCustomizations) && line.selectedCustomizations.length > 0
+          ? line.selectedCustomizations
+          : undefined;
+      const customTotal = customizations
+        ? roundCurrency(customizations.reduce((s, c) => s + c.additionalPrice, 0))
+        : line.customizationTotal;
+      const basePrice = catalogMatch
+        ? roundCurrency(catalogMatch.price)
+        : roundCurrency(line.basePrice ?? Math.max(0, line.price - (customTotal ?? 0)));
+      const unitPrice = roundCurrency(basePrice + (customTotal ?? 0));
+
+      const cartKey = buildCartKey(canonicalId, cleanNote, parsedTemp, customizations);
+      const existing = mergedMap.get(cartKey);
+      if (existing) {
+        existing.quantity = Math.min(99, existing.quantity + line.quantity);
+      } else {
+        mergedMap.set(cartKey, {
+          cartKey,
+          itemId: canonicalId,
+          name: catalogMatch?.name || line.name,
+          nameAr: catalogMatch?.nameAr || line.nameAr,
+          nameEn: catalogMatch?.nameEn,
+          price: unitPrice,
+          basePrice,
+          customizationTotal: customTotal,
+          customizations,
+          imageUrl: catalogMatch?.imageUrl || line.imageUrl,
+          quantity: Math.max(1, Math.min(99, line.quantity)),
+          note: cleanNote,
+          temp: parsedTemp,
+        });
+      }
+    });
+
+    setCart(Array.from(mergedMap.values()));
     navigate('checkout');
   };
 
@@ -541,7 +669,7 @@ export default function App() {
   );
 
   const cartTotal = useMemo(
-    () => cart.reduce((sum, item) => sum + item.price * item.quantity, 0),
+    () => roundCurrency(cart.reduce((sum, item) => sum + item.price * item.quantity, 0)),
     [cart],
   );
 
@@ -581,6 +709,7 @@ export default function App() {
           onNavigate={navigate}
           currentUser={currentUser}
           hasActiveOrder={Boolean(activeOrderId)}
+          cartCount={cartCount}
         />
 
         {isAlarmRinging && view !== 'track' && activeLiveOrder && (
@@ -645,7 +774,7 @@ export default function App() {
               onDismissAuthError={() => setAuthError(null)}
               cart={cart}
               storeSettings={storeSettings}
-              onQuickAdd={(item, temp) => addToCart(item, 1, '', temp)}
+              onQuickAdd={(item, temp) => void handleQuickAdd(item, temp)}
               onUpdateQty={handleUpdateQty}
               onSelectItem={setSelectedItem}
               onOpenInfo={() => navigate('info')}
@@ -668,16 +797,17 @@ export default function App() {
             <CheckoutPage
               lang={lang}
               cart={cart}
+              menuItems={menuItems}
               currentUser={currentUser}
               firebaseUser={currentFirebaseUser}
               authError={authError}
               storeSettings={storeSettings}
               onUpdateQty={handleUpdateQty}
               onUpdateNote={handleUpdateNote}
+              onRefreshCartItemPrice={handleRefreshCartItemPrice}
               onClearCart={() => setCart([])}
               onBackToMenu={() => navigate('menu')}
               onOpenAccount={() => navigate('account')}
-              onUpdateSavedLocation={handleUpdateUserLocation}
               onOrderPlaced={handleOrderPlaced}
             />
           </motion.div>
@@ -768,6 +898,7 @@ export default function App() {
       <MenuItemModal
         lang={lang}
         item={selectedItem}
+        coffeeOptions={storeSettings.coffeeOptions}
         onClose={() => setSelectedItem(null)}
         onAddToCart={addToCart}
       />

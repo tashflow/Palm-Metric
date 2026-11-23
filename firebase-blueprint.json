@@ -45,6 +45,8 @@
         "imageUrl": { "type": "string", "maxLength": 700000 },
         "storagePath": { "type": "string", "maxLength": 512 },
         "inStock": { "type": "boolean" },
+        "stockQuantity": { "type": "number" },
+        "stockCount": { "type": "number" },
         "supportsTemp": { "type": "boolean" },
         "allowTemperature": { "type": "boolean" },
         "allowMilkOption": { "type": "boolean" },
@@ -92,7 +94,7 @@
     },
     "Order": {
       "title": "Order",
-      "description": "Canonical Pickup order created exclusively by createPalmMetricOrder Cloud Function (Admin SDK) and isolated by customerUid.",
+      "description": "Canonical Pickup order created either by Stage 04E Cloud Function or Stage 04L Admin Approval Promotion and isolated by customerUid.",
       "type": "object",
       "properties": {
         "orderNumber": {
@@ -106,6 +108,8 @@
         "customerContact": { "type": "string", "minLength": 4, "maxLength": 80 },
         "items": { "type": "array" },
         "subtotal": { "type": "number" },
+        "discountTotal": { "type": "number" },
+        "taxTotal": { "type": "number" },
         "totalBill": { "type": "number" },
         "currency": { "type": "string", "enum": ["SAR"] },
         "orderType": { "type": "string", "enum": ["pickup"] },
@@ -118,10 +122,101 @@
         "lang": { "type": "string", "enum": ["ar", "en"] },
         "idempotencyKey": { "type": "string", "maxLength": 128 },
         "pricingVersion": { "type": "number" },
+        "sourceRequestId": { "type": "string", "maxLength": 128 },
+        "paymentMethod": { "type": "string", "enum": ["pay_on_pickup"] },
+        "paymentStatus": { "type": "string", "enum": ["unpaid", "paid"] },
+        "approvedBy": { "type": "string", "maxLength": 128 },
+        "approvedAt": { "type": "string", "format": "date-time" },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["orderNumber", "customerUid", "customerName", "customerContact", "items", "totalBill", "status", "createdAt", "updatedAt"]
+    },
+    "OrderRequest": {
+      "title": "OrderRequest",
+      "description": "Spark-compatible customer pickup order request written to /orderRequests/{requestId} with zero client prices. Reviewed, verified, and promoted to /orders by Palm Metric Admin in Stage 04L.",
+      "type": "object",
+      "properties": {
+        "requestId": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_-]+$"
+        },
+        "customerUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "customerName": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "customerContact": { "type": "string", "minLength": 4, "maxLength": 80 },
+        "orderType": { "type": "string", "enum": ["pickup"] },
+        "currency": { "type": "string", "enum": ["SAR"] },
+        "lang": { "type": "string", "enum": ["ar", "en"] },
+        "orderNote": { "type": "string", "maxLength": 220 },
+        "items": { "type": "array" },
+        "status": {
+          "type": "string",
+          "enum": ["pending_review", "reviewing", "verified", "order_created", "approved", "rejected", "cancelled"]
+        },
+        "requestSource": { "type": "string", "enum": ["customer-app-spark"] },
+        "reviewedBy": { "type": "string", "maxLength": 128 },
+        "reviewedAt": { "type": "string", "format": "date-time" },
+        "verifiedBy": { "type": "string", "maxLength": 128 },
+        "verifiedAt": { "type": "string", "format": "date-time" },
+        "verifiedTotalSar": { "type": "number" },
+        "verifiedPricing": { "type": "object" },
+        "approvedBy": { "type": "string", "maxLength": 128 },
+        "approvedAt": { "type": "string", "format": "date-time" },
+        "approvedOrderId": { "type": "string", "maxLength": 128 },
+        "approvedOrderNumber": { "type": "string", "maxLength": 24 },
+        "rejectedBy": { "type": "string", "maxLength": 128 },
+        "rejectedAt": { "type": "string", "format": "date-time" },
+        "rejectionReason": { "type": "string", "maxLength": 300 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "requestId",
+        "customerUid",
+        "customerName",
+        "customerContact",
+        "orderType",
+        "currency",
+        "items",
+        "status",
+        "requestSource",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "OrderRequestAuditLog": {
+      "title": "OrderRequestAuditLog",
+      "description": "Immutable administrative audit trail for Stage 04L order request review, price verification, rejection, and promotion actions.",
+      "type": "object",
+      "properties": {
+        "requestId": { "type": "string", "maxLength": 128 },
+        "action": {
+          "type": "string",
+          "enum": [
+            "start_review",
+            "verify_request",
+            "price_verification",
+            "approve_and_promote",
+            "reject_request",
+            "order_promotion",
+            "duplicate_approval_blocked",
+            "verification_blocked"
+          ]
+        },
+        "adminUid": { "type": "string", "maxLength": 128 },
+        "adminEmail": { "type": "string", "maxLength": 200 },
+        "previousStatus": { "type": "string", "maxLength": 40 },
+        "newStatus": { "type": "string", "maxLength": 40 },
+        "approvedOrderId": { "type": "string", "maxLength": 128 },
+        "approvedOrderNumber": { "type": "string", "maxLength": 24 },
+        "verifiedTotalSar": { "type": "number" },
+        "reason": { "type": "string", "maxLength": 300 },
+        "details": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["requestId", "action", "adminUid", "createdAt"]
     },
     "IdempotencyKey": {
       "title": "IdempotencyKey",
@@ -181,6 +276,19 @@
       },
       "required": ["uid", "token", "updatedAt"]
     },
+    "OrderNumberClaim": {
+      "title": "OrderNumberClaim",
+      "description": "Immutable uniqueness reservation claiming an official PM-XXXXXX orderNumber for a promoted /orders document.",
+      "type": "object",
+      "properties": {
+        "orderNumber": { "type": "string", "minLength": 3, "maxLength": 24 },
+        "orderId": { "type": "string", "maxLength": 128 },
+        "requestId": { "type": "string", "maxLength": 128 },
+        "customerUid": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["orderNumber", "orderId", "requestId", "customerUid", "createdAt"]
+    },
     "AdminUser": {
       "title": "AdminUser",
       "description": "Verified store administrator record.",
@@ -213,9 +321,21 @@
       "schema": { "$ref": "#/entities/ProductCustomization" },
       "description": "Per-product customization groups and options managed strictly by verified admins."
     },
+    "/orderRequests/{requestId}": {
+      "schema": { "$ref": "#/entities/OrderRequest" },
+      "description": "Spark-compatible customer pickup order requests awaiting Admin price verification and approval."
+    },
+    "/orderRequestAuditLogs/{auditId}": {
+      "schema": { "$ref": "#/entities/OrderRequestAuditLog" },
+      "description": "Immutable administrative audit logs recording Stage 04L order request reviews, verifications, promotions, and rejections."
+    },
+    "/orderNumbers/{orderNumber}": {
+      "schema": { "$ref": "#/entities/OrderNumberClaim" },
+      "description": "Immutable orderNumber uniqueness claim index preventing PM-XXXXXX collisions during Spark atomic promotions."
+    },
     "/orders/{orderId}": {
       "schema": { "$ref": "#/entities/Order" },
-      "description": "Canonical Pickup orders created by Cloud Function Admin SDK and isolated by customerUid."
+      "description": "Canonical Pickup orders created by Cloud Function Admin SDK or Admin Dashboard (Stage 04L) and isolated by customerUid."
     },
     "/idempotencyKeys/{keyId}": {
       "schema": { "$ref": "#/entities/IdempotencyKey" },

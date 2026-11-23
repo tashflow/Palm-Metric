@@ -235,6 +235,76 @@ export const COPY: Record<
     noPastOrders: string;
     enablePushBtn: string;
     pushEnabledMsg: string;
+    requestCheckoutTitle: string;
+    requestPickupNoticeDesc: string;
+    estimatedSubtotalLabel: string;
+    estimatedCheckoutTotalLabel: string;
+    estimatedPriceDisclaimer: string;
+    submitOrderRequestBtn: string;
+    submittingOrderRequestBtn: string;
+    requestSubmittedTitle: string;
+    requestSubmittedSubtitle: string;
+    requestReferenceLabel: string;
+    requestAwaitingAdminBadge: string;
+    requestSendWhatsappBtn: string;
+    requestTrackStatusBtn: string;
+    requestDuplicateNotice: string;
+    requestSectionLabel: string;
+    requestStepSubmitted: string;
+    requestStepReview: string;
+    requestStepVerified: string;
+    requestStepOrderCreated: string;
+    requestStepSubmittedHint: string;
+    requestStepReviewHint: string;
+    requestStepVerifiedHint: string;
+    requestStepOrderCreatedHint: string;
+    requestStatusPendingTitle: string;
+    requestStatusReviewingTitle: string;
+    requestStatusApprovedTitle: string;
+    requestStatusRejectedTitle: string;
+    requestStatusCancelledTitle: string;
+    requestViewFinalOrderBtn: string;
+    requestPendingPriceNotice: string;
+    requestTypeBadge: string;
+    orderTypeBadge: string;
+    errInvalidItem: string;
+    errInvalidQuantity: string;
+    errRequestSubmitFailed: string;
+    requestStatusVerifiedTitle: string;
+    requestVerifiedTotalLabel: string;
+    requestVerifiedBreakdownTitle: string;
+    requestDiscountLabel: string;
+    requestTaxLabel: string;
+    navAdmin: string;
+    adminDashboardTitle: string;
+    adminDashboardSubtitle: string;
+    adminFilterAll: string;
+    adminFilterPending: string;
+    adminFilterReviewing: string;
+    adminFilterVerified: string;
+    adminFilterRejected: string;
+    adminFilterCreated: string;
+    adminSearchPlaceholder: string;
+    adminSortNewest: string;
+    adminSortOldest: string;
+    adminStartReviewBtn: string;
+    adminVerifyRequestBtn: string;
+    adminApprovePromoteBtn: string;
+    adminRejectBtn: string;
+    adminConfirmApproveTitle: string;
+    adminConfirmApproveDesc: string;
+    adminConfirmApproveBtn: string;
+    adminCancelBtn: string;
+    adminRejectReasonLabel: string;
+    adminRejectReasonPlaceholder: string;
+    adminRejectReasonRequiredErr: string;
+    adminCatalogCheckPassed: string;
+    adminCatalogCheckBlocked: string;
+    adminVerificationBreakdownHeading: string;
+    adminAuditTrailHeading: string;
+    adminNoRequestsTitle: string;
+    adminNoRequestsDesc: string;
+    adminOrderCreatedBanner: string;
   }
 > = {
   ar: {
@@ -470,6 +540,76 @@ export const COPY: Record<
     noPastOrders: 'لا توجد طلبات سابقة بعد',
     enablePushBtn: 'تفعيل إشعارات الفورية للطلب',
     pushEnabledMsg: 'تم تفعيل إشعارات الطلب بنجاح',
+    requestCheckoutTitle: 'إرسال طلب استلام مبدئي',
+    requestPickupNoticeDesc: 'يُرسل طلبك للمراجعة من إدارة بالم مترك والتحقق من الأسعار وتوفر الأصناف قبل اعتماد الطلب وبدء التحضير.',
+    estimatedSubtotalLabel: 'المجموع الفرعي التقديري (غير مؤكد)',
+    estimatedCheckoutTotalLabel: 'الإجمالي التقديري (بانتظار تأكيد الإدارة)',
+    estimatedPriceDisclaimer: 'الأسعار المعروضة تقديرية فقط وليست فاتورة نهائية. سيتم التحقق من السعر بالريال السعودي وتأكيد الطلب من الإدارة.',
+    submitOrderRequestBtn: 'إرسال طلب مبدئي عبر واتساب',
+    submittingOrderRequestBtn: 'جاري إرسال الطلب المبدئي...',
+    requestSubmittedTitle: 'تم استلام طلبك المبدئي — بانتظار تأكيد الإدارة',
+    requestSubmittedSubtitle: 'لم يتم اعتماد الطلب أو بدء التحضير بعد. ستقوم إدارة بالم مترك بمراجعة الأصناف وتأكيد السعر النهائي بالريال السعودي.',
+    requestReferenceLabel: 'مرجع الطلب المبدئي',
+    requestAwaitingAdminBadge: 'بانتظار مراجعة وتأكيد الإدارة',
+    requestSendWhatsappBtn: 'إرسال ملخص الطلب المبدئي عبر واتساب',
+    requestTrackStatusBtn: 'تتبع حالة الطلب المبدئي',
+    requestDuplicateNotice: 'تم تسجيل هذا الطلب المبدئي مسبقاً — نعرض لك نفس المرجع لمنع التكرار.',
+    requestSectionLabel: 'طلب مبدئي',
+    requestStepSubmitted: 'تم الإرسال',
+    requestStepReview: 'مراجعة الإدارة',
+    requestStepVerified: 'تم التحقق',
+    requestStepOrderCreated: 'اعتماد الطلب',
+    requestStepSubmittedHint: 'وصل الطلب المبدئي',
+    requestStepReviewHint: 'بانتظار التأكيد',
+    requestStepVerifiedHint: 'تأكيد السعر والتوفر',
+    requestStepOrderCreatedHint: 'نُقل للتحضير',
+    requestStatusPendingTitle: 'تم إرسال الطلب المبدئي — بانتظار مراجعة الإدارة',
+    requestStatusReviewingTitle: 'الإدارة تراجع طلبك وتتحقق من السعر',
+    requestStatusApprovedTitle: 'تمت الموافقة وإنشاء الطلب النهائي!',
+    requestStatusRejectedTitle: 'تعذر اعتماد الطلب المبدئي',
+    requestStatusCancelledTitle: 'تم إلغاء الطلب المبدئي',
+    requestViewFinalOrderBtn: 'متابعة تحضير الطلب المعتمد',
+    requestPendingPriceNotice: 'السعر النهائي بالريال السعودي يُؤكد من الإدارة بعد المراجعة — القيمة التقديرية السابقة غير معتمدة للدفع.',
+    requestTypeBadge: 'طلب مبدئي',
+    orderTypeBadge: 'طلب مؤكد',
+    errInvalidItem: 'أحد الأصناف في السلة غير صالح أو مفقود. يرجى مراجعة السلة.',
+    errInvalidQuantity: 'الكمية يجب أن تكون رقماً صحيحاً بين ١ و ٩٩.',
+    errRequestSubmitFailed: 'تعذر إرسال الطلب المبدئي إلى Firestore. سلتك محفوظة — يرجى المحاولة مرة أخرى.',
+    requestStatusVerifiedTitle: 'تم التحقق من الأصناف والسعر — جاهز للاعتماد',
+    requestVerifiedTotalLabel: 'الإجمالي النهائي المعتمد (ريال سعودي)',
+    requestVerifiedBreakdownTitle: 'تفاصيل الأسعار المؤكدة من الإدارة',
+    requestDiscountLabel: 'الخصم',
+    requestTaxLabel: 'الضريبة',
+    navAdmin: 'طلبات الإدارة',
+    adminDashboardTitle: 'لوحة مراجعة واعتماد الطلبات المبدئية',
+    adminDashboardSubtitle: 'تحقق من توفر الأصناف والأسعار الرسمية في Firestore قبل اعتماد وإنشاء الطلب النهائي.',
+    adminFilterAll: 'الكل',
+    adminFilterPending: 'قيد الانتظار',
+    adminFilterReviewing: 'قيد المراجعة',
+    adminFilterVerified: 'تم التحقق',
+    adminFilterRejected: 'مرفوض',
+    adminFilterCreated: 'تم إنشاء الطلب',
+    adminSearchPlaceholder: 'ابحث بمرجع REQ أو اسم العميل أو رقم الجوال...',
+    adminSortNewest: 'الأحدث أولاً',
+    adminSortOldest: 'الأقدم أولاً',
+    adminStartReviewBtn: 'بدء المراجعة',
+    adminVerifyRequestBtn: 'التحقق من الأصناف والسعر',
+    adminApprovePromoteBtn: 'اعتماد وإنشاء الطلب',
+    adminRejectBtn: 'رفض الطلب',
+    adminConfirmApproveTitle: 'تأكيد اعتماد وإنشاء الطلب النهائي',
+    adminConfirmApproveDesc: 'سيتم احتساب السعر الرسمي النهائي بالريال السعودي داخل معاملة Firestore ذرية وإنشاء وثيقة الطلب النهائي.',
+    adminConfirmApproveBtn: 'تأكيد وإنشاء الطلب الآن',
+    adminCancelBtn: 'إلغاء',
+    adminRejectReasonLabel: 'سبب الرفض (إلزامي)',
+    adminRejectReasonPlaceholder: 'اكتب سبباً واضحاً للعميل (مثال: الصنف غير متوفر حالياً)...',
+    adminRejectReasonRequiredErr: 'يرجى كتابة سبب واضح للرفض (٣ أحرف على الأقل).',
+    adminCatalogCheckPassed: 'تمت مطابقة جميع الأصناف والإضافات والتوفر مع قاعدة البيانات الرسمية.',
+    adminCatalogCheckBlocked: 'يوجد تعارض يمنع الاعتماد: أحد الأصناف أو الإضافات غير متوفر أو محذوف.',
+    adminVerificationBreakdownHeading: 'الحسبة الرسمية المعتمدة بالهللة والريال (SAR)',
+    adminAuditTrailHeading: 'سجل التدقيق الإداري',
+    adminNoRequestsTitle: 'لا توجد طلبات مبدئية مطابقة',
+    adminNoRequestsDesc: 'عند إرسال طلبات استلام مبدئية من تطبيق العميل ستظهر هنا مباشرة.',
+    adminOrderCreatedBanner: 'تم اعتماد الطلب المبدئي وإنشاء الطلب الرسمي بنجاح',
   },
   en: {
     brandName: 'Palm Metric',
@@ -704,5 +844,75 @@ export const COPY: Record<
     noPastOrders: 'No past orders yet',
     enablePushBtn: 'Enable Order Push Notifications',
     pushEnabledMsg: 'Push notifications enabled successfully',
+    requestCheckoutTitle: 'Pickup Order Request',
+    requestPickupNoticeDesc: 'Your order request is submitted for Admin review and price verification before preparation begins.',
+    estimatedSubtotalLabel: 'Estimated Subtotal (Unverified)',
+    estimatedCheckoutTotalLabel: 'Estimated Total (Pending Admin Verification)',
+    estimatedPriceDisclaimer: 'Prices shown are estimates only and not a confirmed invoice. Final SAR prices and availability are verified by Palm Metric Admin.',
+    submitOrderRequestBtn: 'Submit Order Request',
+    submittingOrderRequestBtn: 'Submitting Order Request...',
+    requestSubmittedTitle: 'Order Request Submitted — Awaiting Admin Confirmation',
+    requestSubmittedSubtitle: 'Your order is not confirmed or in preparation yet. Palm Metric Admin will review your items and verify the final SAR total.',
+    requestReferenceLabel: 'Request Reference',
+    requestAwaitingAdminBadge: 'Awaiting Admin Verification',
+    requestSendWhatsappBtn: 'Send Order Request via WhatsApp',
+    requestTrackStatusBtn: 'Track Request Status',
+    requestDuplicateNotice: 'This order request was already submitted — showing your existing reference to prevent duplicates.',
+    requestSectionLabel: 'Order Request',
+    requestStepSubmitted: 'Submitted',
+    requestStepReview: 'Admin Review',
+    requestStepVerified: 'Verified',
+    requestStepOrderCreated: 'Order Created',
+    requestStepSubmittedHint: 'Request logged',
+    requestStepReviewHint: 'Awaiting Admin',
+    requestStepVerifiedHint: 'Price checked',
+    requestStepOrderCreatedHint: 'Final order live',
+    requestStatusPendingTitle: 'Request submitted — Awaiting Admin review',
+    requestStatusReviewingTitle: 'Admin is reviewing your request',
+    requestStatusApprovedTitle: 'Verified — Final order created!',
+    requestStatusRejectedTitle: 'Order request could not be approved',
+    requestStatusCancelledTitle: 'Order request cancelled',
+    requestViewFinalOrderBtn: 'Track Final Confirmed Order',
+    requestPendingPriceNotice: 'Final payable total in SAR will be verified by Palm Metric Admin upon approval.',
+    requestTypeBadge: 'Request',
+    orderTypeBadge: 'Confirmed Order',
+    errInvalidItem: 'One or more items in your cart has an invalid or missing item ID.',
+    errInvalidQuantity: 'Item quantity must be a whole number between 1 and 99.',
+    errRequestSubmitFailed: 'Could not submit your order request. Your cart is preserved — please try again.',
+    requestStatusVerifiedTitle: 'Items & price verified — Ready for final order creation',
+    requestVerifiedTotalLabel: 'Verified Final Order Total (SAR)',
+    requestVerifiedBreakdownTitle: 'Admin-Verified Price Breakdown',
+    requestDiscountLabel: 'Discount',
+    requestTaxLabel: 'Tax',
+    navAdmin: 'Admin Requests',
+    adminDashboardTitle: 'Admin Order Request Approval & Verification',
+    adminDashboardSubtitle: 'Verify live Firestore menu availability, customizations, and authoritative SAR totals before promoting to /orders.',
+    adminFilterAll: 'All',
+    adminFilterPending: 'Pending Review',
+    adminFilterReviewing: 'Under Review',
+    adminFilterVerified: 'Verified',
+    adminFilterRejected: 'Rejected',
+    adminFilterCreated: 'Order Created',
+    adminSearchPlaceholder: 'Search by REQ ref, customer name, or phone...',
+    adminSortNewest: 'Newest First',
+    adminSortOldest: 'Oldest First',
+    adminStartReviewBtn: 'Start Review',
+    adminVerifyRequestBtn: 'Verify Items & Prices',
+    adminApprovePromoteBtn: 'Approve & Create Order',
+    adminRejectBtn: 'Reject Request',
+    adminConfirmApproveTitle: 'Confirm Final Order Approval & Creation',
+    adminConfirmApproveDesc: 'This runs an atomic Firestore transaction that re-verifies catalog availability/prices, creates the official /orders record, and updates this request.',
+    adminConfirmApproveBtn: 'Confirm & Create Order',
+    adminCancelBtn: 'Cancel',
+    adminRejectReasonLabel: 'Rejection Reason (Required)',
+    adminRejectReasonPlaceholder: 'Explain clearly why this request cannot be fulfilled...',
+    adminRejectReasonRequiredErr: 'Please provide a clear rejection reason (at least 3 characters).',
+    adminCatalogCheckPassed: 'All items, stock flags, and customizations verified against live Firestore catalog.',
+    adminCatalogCheckBlocked: 'Verification blocked: one or more items or options are missing, disabled, or out of stock.',
+    adminVerificationBreakdownHeading: 'Authoritative SAR Breakdown (Halala-Exact)',
+    adminAuditTrailHeading: 'Admin Audit Trail',
+    adminNoRequestsTitle: 'No matching order requests',
+    adminNoRequestsDesc: 'Incoming customer pickup order requests will appear here in real time.',
+    adminOrderCreatedBanner: 'Request approved and promoted to official order',
   },
 };

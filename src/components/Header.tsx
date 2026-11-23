@@ -1,4 +1,4 @@
-import { Clock, Globe, MapPin, ShoppingBag, User } from 'lucide-react';
+import { Clock, Globe, MapPin, ShieldCheck, ShoppingBag, User } from 'lucide-react';
 import { BUSINESS } from '../data/menu';
 import { COPY } from '../data/i18n';
 import type { Language, PageView, UserAccount } from '../types';
@@ -11,6 +11,7 @@ interface HeaderProps {
   currentUser: UserAccount | null;
   hasActiveOrder: boolean;
   cartCount?: number;
+  showAdminNav?: boolean;
 }
 
 export function Header({
@@ -21,6 +22,7 @@ export function Header({
   currentUser,
   hasActiveOrder,
   cartCount = 0,
+  showAdminNav = false,
 }: HeaderProps) {
   const t = COPY[lang];
 
@@ -115,10 +117,40 @@ export function Header({
               <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-[#C9A227]" />
             )}
           </button>
+
+          {showAdminNav && (
+            <button
+              type="button"
+              onClick={() => onNavigate('admin')}
+              className={`relative inline-flex items-center gap-1.5 py-2 whitespace-nowrap shrink-0 cursor-pointer transition-colors ${
+                activeView === 'admin' ? 'text-[#C9A227]' : 'text-[#F5F0E6]/82 hover:text-[#F5F0E6]'
+              }`}
+            >
+              <ShieldCheck className="h-4 w-4 text-[#C9A227]" />
+              <span>{t.navAdmin}</span>
+              {activeView === 'admin' && (
+                <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-[#C9A227]" />
+              )}
+            </button>
+          )}
         </nav>
 
         {/* Zone 3: Mobile Shortcuts + Language + Account Action */}
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          {showAdminNav && (
+            <button
+              type="button"
+              onClick={() => onNavigate('admin')}
+              aria-label={t.navAdmin}
+              className={`md:hidden flex h-10 w-10 items-center justify-center rounded-xl border transition-colors cursor-pointer ${
+                activeView === 'admin'
+                  ? 'border-[#C9A227] bg-[#C9A227]/20 text-[#C9A227]'
+                  : 'border-[#F5F0E6]/20 bg-[#1A3C2F] text-[#F5F0E6]'
+              }`}
+            >
+              <ShieldCheck className="h-4 w-4 text-[#C9A227]" />
+            </button>
+          )}
           <button
             type="button"
             onClick={() => onNavigate('track')}

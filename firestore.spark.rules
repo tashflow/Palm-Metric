@@ -1,0 +1,754 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Stage 04K Spark Migration Rules Proposal (LOCAL ARTIFACT ONLY — NOT DEPLOYED)
+    // Preserves PII isolation, admin verification hardening, and zero-trust financial rules.
+    // Replaces Cloud Function createPalmMetricOrder with Customer -> /orderRequests -> Admin -> /orders.
+
+    // Global safety net: default deny everything unless explicitly allowed below.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Core primitives
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Query-safe verified admin check (no DB reads inside list rules).
+    // Strictly forbids anonymous providers and unverified emails.
+    function isVerifiedAdminToken() {
+      return isSignedIn()
+        && request.auth.token.firebase.sign_in_provider != 'anonymous'
+        && (
+          (
+            request.auth.token.email_verified == true
+            && 'email' in request.auth.token
+            && request.auth.token.email is string
+            && request.auth.token.email.lower() in [
+              'palmmetric1@gmail.com',
+              'palmmatric1@gmail.com',
+              'tashfilartwork@gmail.com',
+              'tashflow26@gmail.com'
+            ]
+          )
+          || request.auth.uid in ['39H76y4E55g5yX2uY0lE5bQ3a393']
+        );
+    }
+
+    // Full admin verification for single-doc reads and writes.
+    function isAdmin() {
+      return isVerifiedAdminToken()
+        || (
+          isSignedIn()
+          && request.auth.token.email_verified == true
+          && request.auth.token.firebase.sign_in_provider != 'anonymous'
+          && exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+        );
+    }
+
+    // Billboard, Ad & Offer validation blueprint
+    function isValidBillboard(data) {
+      return data.keys().size() >= 1 && data.keys().size() <= 45
+        && data.keys().hasOnly([
+          'title', 'titleAr', 'titleEn', 'name', 'nameAr', 'nameEn', 'headline',
+          'subtitle', 'subtitleAr', 'subtitleEn', 'description', 'descriptionAr',
+          'mediaUrl', 'imageUrl', 'videoUrl', 'posterUrl', 'url', 'image', 'video', 'bannerUrl', 'fileUrl',
+          'storagePath', 'mediaAssetId', 'mediaType', 'type',
+          'active', 'isActive', 'status',
+          'order', 'sortOrder',
+          'category', 'ctaLabel', 'badge', 'discount', 'discountPercent',
+          'offerPrice', 'originalPrice', 'link', 'itemId', 'itemIds', 'featuredItemIds',
+          'createdAt', 'updatedAt'
+        ])
+        && (!('title' in data) || (data.title is string && data.title.size() <= 200))
+        && (!('titleAr' in data) || (data.titleAr is string && data.titleAr.size() <= 200))
+        && (!('titleEn' in data) || (data.titleEn is string && data.titleEn.size() <= 200))
+        && (!('name' in data) || (data.name is string && data.name.size() <= 200))
+        && (!('nameAr' in data) || (data.nameAr is string && data.nameAr.size() <= 200))
+        && (!('nameEn' in data) || (data.nameEn is string && data.nameEn.size() <= 200))
+        && (!('headline' in data) || (data.headline is string && data.headline.size() <= 200))
+        && (!('subtitle' in data) || (data.subtitle is string && data.subtitle.size() <= 400))
+        && (!('subtitleAr' in data) || (data.subtitleAr is string && data.subtitleAr.size() <= 400))
+        && (!('subtitleEn' in data) || (data.subtitleEn is string && data.subtitleEn.size() <= 400))
+        && (!('description' in data) || (data.description is string && data.description.size() <= 500))
+        && (!('descriptionAr' in data) || (data.descriptionAr is string && data.descriptionAr.size() <= 500))
+        && (!('mediaUrl' in data) || (data.mediaUrl is string && data.mediaUrl.size() <= 700000))
+        && (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() <= 700000))
+        && (!('videoUrl' in data) || (data.videoUrl is string && data.videoUrl.size() <= 700000))
+        && (!('posterUrl' in data) || (data.posterUrl is string && data.posterUrl.size() <= 700000))
+        && (!('url' in data) || (data.url is string && data.url.size() <= 700000))
+        && (!('image' in data) || (data.image is string && data.image.size() <= 700000))
+        && (!('video' in data) || (data.video is string && data.video.size() <= 700000))
+        && (!('bannerUrl' in data) || (data.bannerUrl is string && data.bannerUrl.size() <= 700000))
+        && (!('fileUrl' in data) || (data.fileUrl is string && data.fileUrl.size() <= 700000))
+        && (!('storagePath' in data) || (data.storagePath is string && data.storagePath.size() <= 512))
+        && (!('mediaAssetId' in data) || (data.mediaAssetId is string && data.mediaAssetId.size() <= 128))
+        && (!('mediaType' in data) || (data.mediaType is string && data.mediaType.size() <= 40))
+        && (!('type' in data) || (data.type is string && data.type.size() <= 40))
+        && (!('active' in data) || data.active is bool)
+        && (!('isActive' in data) || data.isActive is bool)
+        && (!('status' in data) || (data.status is string && data.status.size() <= 40))
+        && (!('order' in data) || data.order is number)
+        && (!('sortOrder' in data) || data.sortOrder is number)
+        && (!('category' in data) || (data.category is string && data.category.size() <= 80))
+        && (!('ctaLabel' in data) || (data.ctaLabel is string && data.ctaLabel.size() <= 60))
+        && (!('badge' in data) || (data.badge is string && data.badge.size() <= 60))
+        && (!('discount' in data) || (data.discount is string && data.discount.size() <= 60))
+        && (!('discountPercent' in data) || data.discountPercent is number)
+        && (!('offerPrice' in data) || data.offerPrice is number)
+        && (!('originalPrice' in data) || data.originalPrice is number)
+        && (!('link' in data) || (data.link is string && data.link.size() <= 500))
+        && (!('itemId' in data) || (data.itemId is string && data.itemId.size() <= 128))
+        && (!('itemIds' in data) || (data.itemIds is list && data.itemIds.size() <= 20 && (data.itemIds.size() == 0 || data.itemIds[0] is string)))
+        && (!('featuredItemIds' in data) || (data.featuredItemIds is list && data.featuredItemIds.size() <= 20 && (data.featuredItemIds.size() == 0 || data.featuredItemIds[0] is string)))
+        && (!('createdAt' in data) || data.createdAt is timestamp)
+        && (!('updatedAt' in data) || data.updatedAt is timestamp);
+    }
+
+    // Menu & Offer item validation blueprint
+    function isValidMenuItem(data) {
+      return data.keys().size() >= 2 && data.keys().size() <= 64
+        && data.keys().hasOnly([
+          'name', 'nameAr', 'nameEn', 'title', 'titleAr', 'titleEn',
+          'description', 'descriptionAr', 'descriptionEn',
+          'price', 'originalPrice', 'discountPrice', 'offerPrice',
+          'isOffer', 'offerLabel', 'offerLabelAr', 'badge',
+          'category', 'categoryId', 'categoryAr', 'categoryEn', 'categoryName',
+          'imageUrl', 'photoUrl', 'image', 'imgUrl', 'url', 'photo', 'thumbnail', 'picture', 'mediaUrl', 'image_url', 'photo_url', 'storagePath', 'imagePath', 'mediaAssetId',
+          'inStock', 'isAvailable', 'available', 'outOfStock', 'stockStatus', 'stockQuantity', 'stockCount', 'status',
+          'prepTime', 'supportsTemp', 'hasTempOption',
+          'allowMilkOption', 'coconutMilkPrice', 'allowTemperature',
+          'origin', 'originAr', 'region', 'regionAr', 'country', 'countryAr',
+          'processingMethod', 'processingMethodAr', 'roastLevel', 'altitude', 'variety',
+          'tastingNotes', 'tastingNotesAr', 'brewMethods', 'producer',
+          'order', 'sortOrder', 'featured',
+          'createdAt', 'updatedAt'
+        ])
+        && (!('name' in data) || (data.name is string && data.name.size() <= 140))
+        && (!('nameAr' in data) || (data.nameAr is string && data.nameAr.size() <= 140))
+        && (!('nameEn' in data) || (data.nameEn is string && data.nameEn.size() <= 140))
+        && (!('title' in data) || (data.title is string && data.title.size() <= 140))
+        && (!('titleAr' in data) || (data.titleAr is string && data.titleAr.size() <= 140))
+        && (!('titleEn' in data) || (data.titleEn is string && data.titleEn.size() <= 140))
+        && (!('description' in data) || (data.description is string && data.description.size() <= 500))
+        && (!('descriptionAr' in data) || (data.descriptionAr is string && data.descriptionAr.size() <= 500))
+        && (!('descriptionEn' in data) || (data.descriptionEn is string && data.descriptionEn.size() <= 500))
+        && (!('price' in data) || (data.price is number && data.price >= 0 && data.price <= 10000))
+        && (!('originalPrice' in data) || (data.originalPrice is number && data.originalPrice >= 0 && data.originalPrice <= 10000))
+        && (!('discountPrice' in data) || (data.discountPrice is number && data.discountPrice >= 0 && data.discountPrice <= 10000))
+        && (!('offerPrice' in data) || (data.offerPrice is number && data.offerPrice >= 0 && data.offerPrice <= 10000))
+        && (!('isOffer' in data) || data.isOffer is bool)
+        && (!('offerLabel' in data) || (data.offerLabel is string && data.offerLabel.size() <= 60))
+        && (!('offerLabelAr' in data) || (data.offerLabelAr is string && data.offerLabelAr.size() <= 60))
+        && (!('badge' in data) || (data.badge is string && data.badge.size() <= 60))
+        && (!('category' in data) || (data.category is string && data.category.size() <= 80))
+        && (!('categoryId' in data) || (data.categoryId is string && data.categoryId.size() <= 80))
+        && (!('categoryAr' in data) || (data.categoryAr is string && data.categoryAr.size() <= 80))
+        && (!('categoryEn' in data) || (data.categoryEn is string && data.categoryEn.size() <= 80))
+        && (!('categoryName' in data) || (data.categoryName is string && data.categoryName.size() <= 80))
+        && (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() <= 700000))
+        && (!('photoUrl' in data) || (data.photoUrl is string && data.photoUrl.size() <= 700000))
+        && (!('image' in data) || (data.image is string && data.image.size() <= 700000))
+        && (!('imgUrl' in data) || (data.imgUrl is string && data.imgUrl.size() <= 700000))
+        && (!('url' in data) || (data.url is string && data.url.size() <= 700000))
+        && (!('photo' in data) || (data.photo is string && data.photo.size() <= 700000))
+        && (!('thumbnail' in data) || (data.thumbnail is string && data.thumbnail.size() <= 700000))
+        && (!('picture' in data) || (data.picture is string && data.picture.size() <= 700000))
+        && (!('mediaUrl' in data) || (data.mediaUrl is string && data.mediaUrl.size() <= 700000))
+        && (!('image_url' in data) || (data.image_url is string && data.image_url.size() <= 700000))
+        && (!('photo_url' in data) || (data.photo_url is string && data.photo_url.size() <= 700000))
+        && (!('storagePath' in data) || (data.storagePath is string && data.storagePath.size() <= 512))
+        && (!('imagePath' in data) || (data.imagePath is string && data.imagePath.size() <= 512))
+        && (!('mediaAssetId' in data) || (data.mediaAssetId is string && data.mediaAssetId.size() <= 128))
+        && (!('inStock' in data) || data.inStock is bool)
+        && (!('isAvailable' in data) || data.isAvailable is bool)
+        && (!('available' in data) || data.available is bool)
+        && (!('outOfStock' in data) || data.outOfStock is bool)
+        && (!('stockStatus' in data) || (data.stockStatus is string && data.stockStatus.size() <= 40))
+        && (!('stockQuantity' in data) || (data.stockQuantity is number && data.stockQuantity >= 0 && data.stockQuantity <= 1000000))
+        && (!('stockCount' in data) || (data.stockCount is number && data.stockCount >= 0 && data.stockCount <= 1000000))
+        && (!('status' in data) || (data.status is string && data.status.size() <= 40))
+        && (!('prepTime' in data) || (data.prepTime is string && data.prepTime.size() <= 40))
+        && (!('supportsTemp' in data) || data.supportsTemp is bool)
+        && (!('hasTempOption' in data) || data.hasTempOption is bool)
+        && (!('allowMilkOption' in data) || data.allowMilkOption is bool)
+        && (!('coconutMilkPrice' in data) || (data.coconutMilkPrice is number && data.coconutMilkPrice >= 0 && data.coconutMilkPrice <= 500))
+        && (!('allowTemperature' in data) || data.allowTemperature is bool)
+        && (!('origin' in data) || (data.origin is string && data.origin.size() <= 80))
+        && (!('originAr' in data) || (data.originAr is string && data.originAr.size() <= 80))
+        && (!('region' in data) || (data.region is string && data.region.size() <= 80))
+        && (!('regionAr' in data) || (data.regionAr is string && data.regionAr.size() <= 80))
+        && (!('country' in data) || (data.country is string && data.country.size() <= 80))
+        && (!('countryAr' in data) || (data.countryAr is string && data.countryAr.size() <= 80))
+        && (!('processingMethod' in data) || (data.processingMethod is string && data.processingMethod.size() <= 80))
+        && (!('processingMethodAr' in data) || (data.processingMethodAr is string && data.processingMethodAr.size() <= 80))
+        && (!('roastLevel' in data) || (data.roastLevel is string && data.roastLevel.size() <= 60))
+        && (!('altitude' in data) || (data.altitude is string && data.altitude.size() <= 60))
+        && (!('variety' in data) || (data.variety is string && data.variety.size() <= 80))
+        && (!('tastingNotes' in data) || (data.tastingNotes is list && data.tastingNotes.size() <= 12 && (data.tastingNotes.size() == 0 || data.tastingNotes[0] is string)))
+        && (!('tastingNotesAr' in data) || (data.tastingNotesAr is list && data.tastingNotesAr.size() <= 12 && (data.tastingNotesAr.size() == 0 || data.tastingNotesAr[0] is string)))
+        && (!('brewMethods' in data) || (data.brewMethods is list && data.brewMethods.size() <= 12 && (data.brewMethods.size() == 0 || data.brewMethods[0] is string)))
+        && (!('producer' in data) || (data.producer is string && data.producer.size() <= 120))
+        && (!('order' in data) || data.order is number)
+        && (!('sortOrder' in data) || data.sortOrder is number)
+        && (!('featured' in data) || data.featured is bool)
+        && (!('createdAt' in data) || data.createdAt is timestamp)
+        && (!('updatedAt' in data) || data.updatedAt is timestamp);
+    }
+
+    function isValidCategory(data) {
+      return data.keys().size() >= 1 && data.keys().size() <= 15
+        && data.keys().hasOnly(['key', 'name', 'nameAr', 'nameEn', 'order', 'sortOrder', 'active', 'isActive', 'allowMilkOption', 'allowTemperature', 'createdAt', 'updatedAt'])
+        && (!('key' in data) || (data.key is string && data.key.size() <= 80))
+        && (!('name' in data) || (data.name is string && data.name.size() <= 80))
+        && (!('nameAr' in data) || (data.nameAr is string && data.nameAr.size() <= 80))
+        && (!('nameEn' in data) || (data.nameEn is string && data.nameEn.size() <= 80))
+        && (!('order' in data) || data.order is number)
+        && (!('sortOrder' in data) || data.sortOrder is number)
+        && (!('active' in data) || data.active is bool)
+        && (!('isActive' in data) || data.isActive is bool)
+        && (!('allowMilkOption' in data) || data.allowMilkOption is bool)
+        && (!('allowTemperature' in data) || data.allowTemperature is bool)
+        && (!('createdAt' in data) || data.createdAt is timestamp)
+        && (!('updatedAt' in data) || data.updatedAt is timestamp);
+    }
+
+    function isValidProductCustomization(data, productId) {
+      return data.keys().hasAll(['productId', 'enabled', 'groups', 'schemaVersion'])
+        && data.keys().hasOnly([
+          'productId', 'enabled', 'groups', 'schemaVersion',
+          'allowSpecialInstructions', 'updatedAt', 'updatedBy', 'createdAt'
+        ])
+        && data.productId is string && data.productId == productId
+        && data.enabled is bool
+        && data.schemaVersion is number && data.schemaVersion >= 1 && data.schemaVersion <= 100
+        && data.groups is list && data.groups.size() <= 20
+        && (data.groups.size() == 0 || (
+          data.groups[0] is map
+          && data.groups[0].keys().hasAll(['id', 'name', 'type', 'required', 'minSelections', 'maxSelections', 'displayOrder', 'enabled', 'options'])
+          && data.groups[0].keys().hasOnly(['id', 'name', 'nameAr', 'type', 'required', 'minSelections', 'maxSelections', 'displayOrder', 'enabled', 'options'])
+          && data.groups[0].id is string && data.groups[0].id.size() >= 1 && data.groups[0].id.size() <= 80
+          && data.groups[0].name is string && data.groups[0].name.size() <= 120
+          && (!('nameAr' in data.groups[0]) || (data.groups[0].nameAr is string && data.groups[0].nameAr.size() <= 120))
+          && data.groups[0].type in ['single', 'multiple']
+          && data.groups[0].required is bool
+          && data.groups[0].minSelections is number && data.groups[0].minSelections >= 0 && data.groups[0].minSelections <= 50
+          && data.groups[0].maxSelections is number && data.groups[0].maxSelections >= 1 && data.groups[0].maxSelections <= 50
+          && data.groups[0].displayOrder is number
+          && data.groups[0].enabled is bool
+          && data.groups[0].options is list && data.groups[0].options.size() <= 40
+          && (data.groups[0].options.size() == 0 || (
+            data.groups[0].options[0] is map
+            && data.groups[0].options[0].keys().hasAll(['id', 'name', 'additionalPrice', 'enabled', 'displayOrder'])
+            && data.groups[0].options[0].keys().hasOnly(['id', 'name', 'nameAr', 'additionalPrice', 'enabled', 'isDefault', 'displayOrder'])
+            && data.groups[0].options[0].id is string && data.groups[0].options[0].id.size() >= 1 && data.groups[0].options[0].id.size() <= 80
+            && data.groups[0].options[0].name is string && data.groups[0].options[0].name.size() <= 120
+            && data.groups[0].options[0].additionalPrice is number && data.groups[0].options[0].additionalPrice >= 0 && data.groups[0].options[0].additionalPrice <= 5000
+            && data.groups[0].options[0].enabled is bool
+            && data.groups[0].options[0].displayOrder is number
+          ))
+        ))
+        && (!('allowSpecialInstructions' in data) || data.allowSpecialInstructions is bool)
+        && (!('updatedBy' in data) || (data.updatedBy is string && data.updatedBy.size() <= 200))
+        && (!('createdAt' in data) || data.createdAt is timestamp)
+        && (!('updatedAt' in data) || data.updatedAt is timestamp);
+    }
+
+    function isValidStoreSettings(data) {
+      return data.keys().size() >= 1 && data.keys().size() <= 25
+        && data.keys().hasOnly([
+          'storeOpen', 'isOpen', 'prepTime', 'whatsappNumber',
+          'announcement', 'announcementAr', 'heroTitle', 'heroTitleAr',
+          'heroSubtitle', 'heroSubtitleAr',
+          'milkSelectionEnabled', 'coconutMilkExtraPrice', 'hotColdSelectionEnabled',
+          'updatedAt', 'createdAt'
+        ])
+        && (!('storeOpen' in data) || data.storeOpen is bool)
+        && (!('isOpen' in data) || data.isOpen is bool)
+        && (!('prepTime' in data) || (data.prepTime is string && data.prepTime.size() <= 40))
+        && (!('whatsappNumber' in data) || (data.whatsappNumber is string && data.whatsappNumber.size() <= 30))
+        && (!('announcement' in data) || (data.announcement is string && data.announcement.size() <= 300))
+        && (!('announcementAr' in data) || (data.announcementAr is string && data.announcementAr.size() <= 300))
+        && (!('heroTitle' in data) || (data.heroTitle is string && data.heroTitle.size() <= 140))
+        && (!('heroTitleAr' in data) || (data.heroTitleAr is string && data.heroTitleAr.size() <= 140))
+        && (!('heroSubtitle' in data) || (data.heroSubtitle is string && data.heroSubtitle.size() <= 300))
+        && (!('heroSubtitleAr' in data) || (data.heroSubtitleAr is string && data.heroSubtitleAr.size() <= 300))
+        && (!('milkSelectionEnabled' in data) || data.milkSelectionEnabled is bool)
+        && (!('coconutMilkExtraPrice' in data) || (data.coconutMilkExtraPrice is number && data.coconutMilkExtraPrice >= 0 && data.coconutMilkExtraPrice <= 500))
+        && (!('hotColdSelectionEnabled' in data) || data.hotColdSelectionEnabled is bool)
+        && (!('createdAt' in data) || data.createdAt is timestamp)
+        && (!('updatedAt' in data) || data.updatedAt is timestamp);
+    }
+
+    // Stage 04K Customer Order Request blueprint (NO prices, NO discounts, NO taxes, NO totals, NO admin approval fields)
+    function isValidOrderRequestItem(item) {
+      return item is map
+        && item.keys().hasAll(['itemId', 'quantity'])
+        && item.keys().hasOnly([
+          'itemId', 'quantity', 'selectedSizeId', 'selectedCustomizations',
+          'temperature', 'milkOption', 'specialInstructions', 'name', 'nameAr'
+        ])
+        && item.itemId is string && item.itemId.size() >= 1 && item.itemId.size() <= 128 && item.itemId.matches('^[a-zA-Z0-9_\\-]+$')
+        && item.quantity is int && item.quantity >= 1 && item.quantity <= 99
+        && (!('name' in item) || (item.name is string && item.name.size() <= 120))
+        && (!('nameAr' in item) || (item.nameAr is string && item.nameAr.size() <= 120))
+        && (!('selectedSizeId' in item) || (item.selectedSizeId is string && item.selectedSizeId.size() >= 1 && item.selectedSizeId.size() <= 80))
+        && (!('temperature' in item) || item.temperature in ['Hot', 'Cold'])
+        && (!('milkOption' in item) || item.milkOption in ['none', 'regular', 'coconut'])
+        && (!('specialInstructions' in item) || (item.specialInstructions is string && item.specialInstructions.size() <= 160))
+        && (!('selectedCustomizations' in item) || (
+          item.selectedCustomizations is list
+          && item.selectedCustomizations.size() <= 30
+          && (item.selectedCustomizations.size() == 0 || (
+            item.selectedCustomizations[0] is map
+            && item.selectedCustomizations[0].keys().hasAll(['groupId', 'optionId'])
+            && item.selectedCustomizations[0].keys().hasOnly(['groupId', 'optionId'])
+            && item.selectedCustomizations[0].groupId is string && item.selectedCustomizations[0].groupId.size() >= 1 && item.selectedCustomizations[0].groupId.size() <= 80
+            && item.selectedCustomizations[0].optionId is string && item.selectedCustomizations[0].optionId.size() >= 1 && item.selectedCustomizations[0].optionId.size() <= 80
+          ))
+        ));
+    }
+
+    function isValidOrderRequestCreate(data, docRequestId) {
+      return data.keys().hasAll([
+          'requestId', 'customerUid', 'customerName', 'customerContact',
+          'orderType', 'currency', 'items', 'status', 'requestSource',
+          'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'requestId', 'customerUid', 'customerName', 'customerContact',
+          'orderType', 'currency', 'lang', 'orderNote', 'items',
+          'status', 'requestSource', 'createdAt', 'updatedAt'
+        ])
+        && data.requestId is string && data.requestId == docRequestId && data.requestId.size() >= 8 && data.requestId.size() <= 128
+        && data.customerUid is string && data.customerUid == request.auth.uid && data.customerUid.size() <= 128
+        && data.customerName is string && data.customerName.size() >= 1 && data.customerName.size() <= 80
+        && data.customerContact is string && data.customerContact.size() >= 4 && data.customerContact.size() <= 80
+        && data.orderType == 'pickup'
+        && data.currency == 'SAR'
+        && (!('lang' in data) || data.lang in ['ar', 'en'])
+        && (!('orderNote' in data) || (data.orderNote is string && data.orderNote.size() <= 220))
+        && data.items is list && data.items.size() >= 1 && data.items.size() <= 50
+        && isValidOrderRequestItem(data.items[0])
+        && data.status == 'pending_review'
+        && data.requestSource == 'customer-app-spark'
+        && data.createdAt == request.time
+        && data.updatedAt == request.time;
+    }
+
+    function isValidOrderRequestAdminUpdate(data, reqId) {
+      return !(existing().status in ['order_created', 'approved', 'rejected', 'cancelled'])
+        && data.keys().hasAll([
+          'requestId', 'customerUid', 'customerName', 'customerContact',
+          'orderType', 'currency', 'items', 'status', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'requestId', 'customerUid', 'customerName', 'customerContact',
+          'orderType', 'currency', 'lang', 'orderNote', 'items',
+          'status', 'requestSource',
+          'reviewedBy', 'reviewedAt',
+          'verifiedBy', 'verifiedAt', 'verifiedTotalSar', 'verifiedPricing',
+          'approvedBy', 'approvedAt', 'approvedOrderId', 'approvedOrderNumber',
+          'rejectedBy', 'rejectedAt', 'rejectionReason',
+          'createdAt', 'updatedAt'
+        ])
+        && data.requestId == existing().requestId
+        && data.customerUid == existing().customerUid
+        && data.customerName == existing().customerName
+        && data.customerContact == existing().customerContact
+        && data.orderType == existing().orderType
+        && data.currency == existing().currency
+        && data.items == existing().items
+        && data.createdAt == existing().createdAt
+        && (!('lang' in existing()) || ('lang' in data && data.lang == existing().lang))
+        && (!('orderNote' in existing()) || ('orderNote' in data && data.orderNote == existing().orderNote))
+        && (!('requestSource' in existing()) || ('requestSource' in data && data.requestSource == existing().requestSource))
+        && data.status in ['pending_review', 'reviewing', 'verified', 'order_created', 'approved', 'rejected', 'cancelled']
+        && (!('reviewedBy' in data) || (data.reviewedBy is string && data.reviewedBy.size() <= 128))
+        && (!('reviewedAt' in data) || data.reviewedAt is timestamp)
+        && (!('verifiedBy' in data) || (data.verifiedBy is string && data.verifiedBy.size() <= 128))
+        && (!('verifiedAt' in data) || data.verifiedAt is timestamp)
+        && (!('verifiedTotalSar' in data) || (data.verifiedTotalSar is number && data.verifiedTotalSar >= 0 && data.verifiedTotalSar <= 100000))
+        && (!('verifiedPricing' in data) || (
+          data.verifiedPricing is map
+          && data.verifiedPricing.currency == 'SAR'
+          && data.verifiedPricing.orderType == 'pickup'
+          && data.verifiedPricing.subtotalSar is number && data.verifiedPricing.subtotalSar >= 0 && data.verifiedPricing.subtotalSar <= 100000
+          && data.verifiedPricing.discountSar is number && data.verifiedPricing.discountSar >= 0 && data.verifiedPricing.discountSar <= 100000
+          && data.verifiedPricing.taxSar is number && data.verifiedPricing.taxSar >= 0 && data.verifiedPricing.taxSar <= 100000
+          && data.verifiedPricing.totalBillSar is number
+          && data.verifiedPricing.totalBillSar >= 0
+          && data.verifiedPricing.totalBillSar <= 100000
+          && (!('verifiedTotalSar' in data) || data.verifiedPricing.totalBillSar == data.verifiedTotalSar)
+        ))
+        && (!('approvedBy' in data) || (data.approvedBy is string && data.approvedBy == request.auth.uid && data.approvedBy.size() <= 128))
+        && (!('approvedAt' in data) || data.approvedAt is timestamp)
+        && (!('approvedOrderId' in data) || (data.approvedOrderId is string && isValidId(data.approvedOrderId)))
+        && (!('approvedOrderNumber' in data) || (data.approvedOrderNumber is string && data.approvedOrderNumber.size() >= 3 && data.approvedOrderNumber.size() <= 24))
+        && (!('rejectedBy' in data) || (data.rejectedBy is string && data.rejectedBy == request.auth.uid && data.rejectedBy.size() <= 128))
+        && (!('rejectedAt' in data) || data.rejectedAt is timestamp)
+        && (!('rejectionReason' in data) || (data.rejectionReason is string && data.rejectionReason.size() <= 300))
+        && (
+          !(data.status in ['order_created', 'approved'])
+          || (
+            'approvedOrderId' in data
+            && 'approvedOrderNumber' in data
+            && 'verifiedTotalSar' in data
+            && 'approvedBy' in data
+            && data.approvedBy == request.auth.uid
+            && 'approvedAt' in data
+            && data.approvedAt == request.time
+            && existsAfter(/databases/$(database)/documents/orders/$(data.approvedOrderId))
+            && getAfter(/databases/$(database)/documents/orders/$(data.approvedOrderId)).data.sourceRequestId == reqId
+            && getAfter(/databases/$(database)/documents/orders/$(data.approvedOrderId)).data.customerUid == existing().customerUid
+            && getAfter(/databases/$(database)/documents/orders/$(data.approvedOrderId)).data.orderNumber == data.approvedOrderNumber
+            && getAfter(/databases/$(database)/documents/orders/$(data.approvedOrderId)).data.totalBill == data.verifiedTotalSar
+          )
+        )
+        && (
+          data.status != 'rejected'
+          || (
+            'rejectionReason' in data
+            && data.rejectionReason is string
+            && data.rejectionReason.size() >= 3
+            && 'rejectedBy' in data
+            && data.rejectedBy == request.auth.uid
+            && 'rejectedAt' in data
+            && data.rejectedAt == request.time
+          )
+        )
+        && data.updatedAt == request.time;
+    }
+
+    // Canonical Order validation blueprints (aligned with Palm Metric Admin App)
+    function isValidOrderLineItem(item) {
+      return item is map
+        && item.keys().hasAll(['itemId', 'name', 'price', 'quantity'])
+        && item.keys().hasOnly([
+          'itemId', 'name', 'nameAr', 'price', 'basePrice', 'customizationTotal',
+          'quantity', 'selectedCustomizations', 'specialInstructions', 'note',
+          'imageUrl', 'temperature', 'milkOption', 'milkExtraPrice'
+        ])
+        && item.itemId is string && item.itemId.size() >= 1 && item.itemId.size() <= 128
+        && item.name is string && item.name.size() >= 1 && item.name.size() <= 120
+        && (!('nameAr' in item) || (item.nameAr is string && item.nameAr.size() <= 120))
+        && item.price is number && item.price >= 0 && item.price <= 100000
+        && (!('basePrice' in item) || (item.basePrice is number && item.basePrice >= 0 && item.basePrice <= 100000))
+        && (!('customizationTotal' in item) || (item.customizationTotal is number && item.customizationTotal >= 0 && item.customizationTotal <= 50000))
+        && item.quantity is number && item.quantity >= 1 && item.quantity <= 99
+        && (!('selectedCustomizations' in item) || (item.selectedCustomizations is list && item.selectedCustomizations.size() <= 30 && (item.selectedCustomizations.size() == 0 || item.selectedCustomizations[0] is map)))
+        && (!('specialInstructions' in item) || (item.specialInstructions is string && item.specialInstructions.size() <= 160))
+        && (!('note' in item) || (item.note is string && item.note.size() <= 240))
+        && (!('imageUrl' in item) || (item.imageUrl is string && item.imageUrl.size() <= 512))
+        && (!('temperature' in item) || item.temperature in ['Hot', 'Cold'])
+        && (!('milkOption' in item) || item.milkOption in ['none', 'regular', 'coconut'])
+        && (!('milkExtraPrice' in item) || (item.milkExtraPrice is number && item.milkExtraPrice >= 0 && item.milkExtraPrice <= 500));
+    }
+
+    // Verified Admin-only order creation in Spark mode (blocks ALL customers & anonymous users)
+    function isValidAdminOrderCreate(data, orderId) {
+      return data.keys().hasAll(['orderNumber', 'customerUid', 'customerName', 'customerContact', 'items', 'totalBill', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly([
+          'orderNumber', 'customerUid', 'customerName', 'customerContact',
+          'items', 'subtotal', 'discountTotal', 'taxTotal', 'totalBill', 'currency', 'orderType',
+          'status', 'notes', 'sourceApp', 'lang', 'idempotencyKey',
+          'pricingVersion', 'sourceRequestId', 'paymentMethod', 'paymentStatus',
+          'approvedBy', 'approvedAt', 'createdAt', 'updatedAt'
+        ])
+        && data.orderNumber is string && data.orderNumber.size() >= 3 && data.orderNumber.size() <= 24 && data.orderNumber.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.customerUid is string && data.customerUid.size() >= 1 && data.customerUid.size() <= 128
+        && data.customerName is string && data.customerName.size() >= 1 && data.customerName.size() <= 80
+        && data.customerContact is string && data.customerContact.size() >= 4 && data.customerContact.size() <= 80
+        && data.items is list && data.items.size() >= 1 && data.items.size() <= 50
+        && isValidOrderLineItem(data.items[0])
+        && data.totalBill is number && data.totalBill >= 0 && data.totalBill <= 100000
+        && (!('subtotal' in data) || (data.subtotal is number && data.subtotal >= 0 && data.subtotal <= 100000))
+        && (!('discountTotal' in data) || (data.discountTotal is number && data.discountTotal >= 0 && data.discountTotal <= 100000))
+        && (!('taxTotal' in data) || (data.taxTotal is number && data.taxTotal >= 0 && data.taxTotal <= 100000))
+        && (!('currency' in data) || data.currency == 'SAR')
+        && (!('orderType' in data) || data.orderType == 'pickup')
+        && (!('notes' in data) || (data.notes is string && data.notes.size() <= 240))
+        && (!('sourceRequestId' in data) || (data.sourceRequestId is string && isValidId(data.sourceRequestId)))
+        && (!('paymentMethod' in data) || data.paymentMethod == 'pay_on_pickup')
+        && (!('paymentStatus' in data) || data.paymentStatus in ['unpaid', 'paid'])
+        && (!('approvedBy' in data) || (data.approvedBy is string && data.approvedBy == request.auth.uid && data.approvedBy.size() <= 128))
+        && (!('approvedAt' in data) || data.approvedAt == request.time)
+        && (
+          !('sourceRequestId' in data)
+          || (
+            'approvedBy' in data
+            && data.approvedBy == request.auth.uid
+            && 'approvedAt' in data
+            && data.approvedAt == request.time
+            && existsAfter(/databases/$(database)/documents/orderRequests/$(data.sourceRequestId))
+            && getAfter(/databases/$(database)/documents/orderRequests/$(data.sourceRequestId)).data.approvedOrderId == orderId
+            && getAfter(/databases/$(database)/documents/orderRequests/$(data.sourceRequestId)).data.approvedOrderNumber == data.orderNumber
+            && getAfter(/databases/$(database)/documents/orderRequests/$(data.sourceRequestId)).data.status in ['order_created', 'approved']
+            && getAfter(/databases/$(database)/documents/orderRequests/$(data.sourceRequestId)).data.customerUid == data.customerUid
+            && existsAfter(/databases/$(database)/documents/orderNumbers/$(data.orderNumber))
+            && getAfter(/databases/$(database)/documents/orderNumbers/$(data.orderNumber)).data.orderId == orderId
+            && getAfter(/databases/$(database)/documents/orderNumbers/$(data.orderNumber)).data.requestId == data.sourceRequestId
+          )
+        )
+        && data.status == 'Pending'
+        && data.createdAt == request.time
+        && data.updatedAt == request.time;
+    }
+
+    function isValidOrderNumberClaim(data, orderNum) {
+      return data.keys().hasAll(['orderNumber', 'orderId', 'requestId', 'customerUid', 'createdAt'])
+        && data.keys().hasOnly(['orderNumber', 'orderId', 'requestId', 'customerUid', 'createdAt'])
+        && data.orderNumber is string && data.orderNumber == orderNum && data.orderNumber.size() >= 3 && data.orderNumber.size() <= 24
+        && data.orderId is string && isValidId(data.orderId)
+        && data.requestId is string && isValidId(data.requestId)
+        && data.customerUid is string && data.customerUid.size() >= 1 && data.customerUid.size() <= 128
+        && data.createdAt == request.time
+        && existsAfter(/databases/$(database)/documents/orders/$(data.orderId))
+        && getAfter(/databases/$(database)/documents/orders/$(data.orderId)).data.orderNumber == orderNum
+        && getAfter(/databases/$(database)/documents/orders/$(data.orderId)).data.sourceRequestId == data.requestId;
+    }
+
+    function isValidOrderUpdate(data) {
+      return data.keys().hasAll(['orderNumber', 'customerUid', 'customerName', 'customerContact', 'items', 'totalBill', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly([
+          'orderNumber', 'customerUid', 'customerName', 'customerContact',
+          'items', 'subtotal', 'discountTotal', 'taxTotal', 'totalBill', 'currency', 'orderType',
+          'status', 'notes', 'sourceApp', 'lang', 'idempotencyKey',
+          'pricingVersion', 'sourceRequestId', 'paymentMethod', 'paymentStatus',
+          'approvedBy', 'approvedAt', 'createdAt', 'updatedAt'
+        ])
+        && data.orderNumber == existing().orderNumber
+        && data.customerUid == existing().customerUid
+        && data.customerName == existing().customerName
+        && data.customerContact == existing().customerContact
+        && data.items == existing().items
+        && data.totalBill == existing().totalBill
+        && data.createdAt == existing().createdAt
+        && (!('subtotal' in existing()) || data.subtotal == existing().subtotal)
+        && (!('discountTotal' in existing()) || data.discountTotal == existing().discountTotal)
+        && (!('taxTotal' in existing()) || data.taxTotal == existing().taxTotal)
+        && (!('currency' in existing()) || data.currency == existing().currency)
+        && (!('orderType' in existing()) || data.orderType == existing().orderType)
+        && (!('sourceApp' in existing()) || data.sourceApp == existing().sourceApp)
+        && (!('lang' in existing()) || data.lang == existing().lang)
+        && (!('idempotencyKey' in existing()) || data.idempotencyKey == existing().idempotencyKey)
+        && (!('pricingVersion' in existing()) || data.pricingVersion == existing().pricingVersion)
+        && (!('sourceRequestId' in existing()) || data.sourceRequestId == existing().sourceRequestId)
+        && (!('paymentMethod' in existing()) || data.paymentMethod == existing().paymentMethod)
+        && (!('approvedBy' in existing()) || data.approvedBy == existing().approvedBy)
+        && (!('approvedAt' in existing()) || data.approvedAt == existing().approvedAt)
+        && data.status in ['Pending', 'Preparing', 'Ready', 'Completed', 'Cancelled']
+        && data.updatedAt == request.time;
+    }
+
+    function isValidOrderRequestAuditLog(data) {
+      return data.keys().hasAll(['requestId', 'action', 'adminUid', 'createdAt'])
+        && data.keys().hasOnly([
+          'requestId', 'action', 'adminUid', 'adminEmail',
+          'previousStatus', 'newStatus', 'approvedOrderId',
+          'approvedOrderNumber', 'verifiedTotalSar', 'reason', 'details', 'createdAt'
+        ])
+        && data.requestId is string && data.requestId.size() >= 1 && data.requestId.size() <= 128
+        && data.action in [
+          'start_review', 'verify_request', 'price_verification',
+          'approve_and_promote', 'reject_request', 'order_promotion',
+          'duplicate_approval_blocked', 'verification_blocked'
+        ]
+        && data.adminUid is string && data.adminUid == request.auth.uid && data.adminUid.size() <= 128
+        && (!('adminEmail' in data) || (data.adminEmail is string && data.adminEmail.size() <= 200))
+        && (!('previousStatus' in data) || (data.previousStatus is string && data.previousStatus.size() <= 40))
+        && (!('newStatus' in data) || (data.newStatus is string && data.newStatus.size() <= 40))
+        && (!('approvedOrderId' in data) || (data.approvedOrderId is string && data.approvedOrderId.size() <= 128))
+        && (!('approvedOrderNumber' in data) || (data.approvedOrderNumber is string && data.approvedOrderNumber.size() <= 24))
+        && (!('verifiedTotalSar' in data) || (data.verifiedTotalSar is number && data.verifiedTotalSar >= 0 && data.verifiedTotalSar <= 100000))
+        && (!('reason' in data) || (data.reason is string && data.reason.size() <= 300))
+        && (!('details' in data) || (data.details is string && data.details.size() <= 500))
+        && data.createdAt == request.time;
+    }
+
+    function isValidReportCreate(data) {
+      return data.keys().hasAll(['type', 'title', 'status', 'createdAt'])
+        && data.keys().hasOnly([
+          'type', 'title', 'message', 'orderId', 'orderNumber', 'orderType',
+          'customerName', 'customerPhone', 'itemCount', 'total', 'status', 'sourceApp', 'createdAt'
+        ])
+        && data.type in ['order', 'feedback', 'customer_signup', 'issue']
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 160
+        && data.status == 'New'
+        && data.createdAt == request.time
+        && (!('message' in data) || (data.message is string && data.message.size() <= 1000))
+        && (!('orderId' in data) || (data.orderId is string && data.orderId.size() <= 128))
+        && (!('orderNumber' in data) || (data.orderNumber is string && data.orderNumber.size() <= 40))
+        && (!('orderType' in data) || (data.orderType is string && data.orderType.size() <= 20))
+        && (!('customerName' in data) || (data.customerName is string && data.customerName.size() <= 80))
+        && (!('customerPhone' in data) || (data.customerPhone is string && data.customerPhone.size() <= 80))
+        && (!('itemCount' in data) || (data.itemCount is number && data.itemCount >= 0 && data.itemCount <= 500))
+        && (!('total' in data) || (data.total is number && data.total >= 0 && data.total <= 100000))
+        && (!('sourceApp' in data) || (data.sourceApp is string && data.sourceApp.size() <= 60));
+    }
+
+    function isValidReportUpdate(data) {
+      return data.keys().hasAll(['type', 'title', 'status', 'createdAt'])
+        && data.type == existing().type
+        && data.title == existing().title
+        && data.createdAt == existing().createdAt
+        && data.status in ['New', 'Reviewed', 'Resolved'];
+    }
+
+    function isValidFcmToken(data) {
+      return data.keys().hasAll(['uid', 'token', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'token', 'updatedAt', 'userAgent'])
+        && data.uid is string && data.uid == request.auth.uid && data.uid.size() <= 128
+        && data.token is string && data.token.size() >= 10 && data.token.size() <= 4096
+        && data.updatedAt is string && data.updatedAt.size() <= 64
+        && (!('userAgent' in data) || (data.userAgent is string && data.userAgent.size() <= 512));
+    }
+
+    // Publicly readable active billboards; verified admin writes
+    match /billboards/{billboardId} {
+      allow get: if isValidId(billboardId);
+      allow list: if isVerifiedAdminToken() || resource.data.isActive == true || resource.data.active == true;
+      allow create, update: if isValidId(billboardId) && isAdmin() && isValidBillboard(incoming());
+      allow delete: if isValidId(billboardId) && isAdmin();
+    }
+
+    // Primary menu collection; public reads filtered to inStock items (admins list all)
+    match /menu/{itemId} {
+      allow get: if isValidId(itemId);
+      allow list: if isVerifiedAdminToken() || resource.data.inStock == true;
+      allow create, update: if isValidId(itemId) && isAdmin() && isValidMenuItem(incoming());
+      allow delete: if isValidId(itemId) && isAdmin();
+    }
+
+    // Categories
+    match /categories/{categoryId} {
+      allow get: if isValidId(categoryId);
+      allow list: if true;
+      allow create, update: if isValidId(categoryId) && isAdmin() && isValidCategory(incoming());
+      allow delete: if isValidId(categoryId) && isAdmin();
+    }
+
+    // Per-product customization groups & options: public single-doc get, strictly admin writes
+    match /productCustomizations/{productId} {
+      allow get: if isValidId(productId);
+      allow list: if isVerifiedAdminToken();
+      allow create, update: if isValidId(productId) && isAdmin() && isValidProductCustomization(incoming(), productId);
+      allow delete: if isValidId(productId) && isAdmin();
+    }
+
+    // Storefront & coffee options settings controlled by Admin App
+    match /settings/{settingId} {
+      allow get: if isValidId(settingId);
+      allow list: if isVerifiedAdminToken();
+      allow create, update: if isValidId(settingId) && isAdmin() && isValidStoreSettings(incoming());
+      allow delete: if isValidId(settingId) && isAdmin();
+    }
+
+    // Uploaded media assets and chunked video/image payloads
+    match /mediaAssets/{assetId} {
+      allow get: if isValidId(assetId);
+      allow list: if isVerifiedAdminToken();
+      allow create, update, delete: if isValidId(assetId) && isAdmin();
+
+      match /chunks/{chunkId} {
+        allow get: if isValidId(assetId) && isValidId(chunkId);
+        allow list: if isVerifiedAdminToken();
+        allow create, update, delete: if isValidId(assetId) && isValidId(chunkId) && isAdmin();
+      }
+    }
+
+    // Order Requests (Stage 04K Spark Checkout):
+    // Signed-in customer (including anonymous guest) creates request bound strictly to own customerUid.
+    // Customers can read/list only their own requests; only verified Admins can update/approve/reject or delete.
+    match /orderRequests/{requestId} {
+      allow get: if isValidId(requestId) && isSignedIn() && (
+        isAdmin() || ('customerUid' in existing() && existing().customerUid == request.auth.uid)
+      );
+      allow list: if isSignedIn() && (
+        isVerifiedAdminToken() || ('customerUid' in resource.data && resource.data.customerUid == request.auth.uid)
+      );
+      allow create: if isValidId(requestId) && isSignedIn() && isValidOrderRequestCreate(incoming(), requestId);
+      allow update: if isValidId(requestId) && isAdmin() && isValidOrderRequestAdminUpdate(incoming(), requestId);
+      allow delete: if isValidId(requestId) && isAdmin();
+    }
+
+    // Orders: Strict PII isolation & Admin-Verified Creation (Spark Mode).
+    // Finalized orders CANNOT be created by customers or anonymous users.
+    // Customers can ONLY read/list orders where customerUid == request.auth.uid.
+    match /orders/{orderId} {
+      allow get: if isValidId(orderId) && isSignedIn() && (
+        isAdmin() || ('customerUid' in existing() && existing().customerUid == request.auth.uid)
+      );
+      allow list: if isSignedIn() && (
+        isVerifiedAdminToken() || ('customerUid' in resource.data && resource.data.customerUid == request.auth.uid)
+      );
+      allow create: if isValidId(orderId) && isAdmin() && isValidAdminOrderCreate(incoming(), orderId);
+      allow update: if isValidId(orderId) && isAdmin() && isValidOrderUpdate(incoming())
+        && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']);
+      allow delete: if isValidId(orderId) && isAdmin();
+    }
+
+    // Idempotency ledger: preserved for rollback compatibility, strictly server-only
+    match /idempotencyKeys/{keyId} {
+      allow read, write: if false;
+    }
+
+    // Reports: Customer app submits feedback/issues; only verified admins read and manage them
+    match /reports/{reportId} {
+      allow create: if isValidId(reportId) && isSignedIn() && isValidReportCreate(incoming());
+      allow get: if isValidId(reportId) && isAdmin();
+      allow list: if isVerifiedAdminToken();
+      allow update: if isValidId(reportId) && isAdmin() && isValidReportUpdate(incoming())
+        && incoming().diff(existing()).affectedKeys().hasOnly(['status']);
+      allow delete: if isValidId(reportId) && isAdmin();
+    }
+
+    // FCM Notification Tokens: user-owned token documents
+    match /fcmTokens/{tokenId} {
+      allow get: if isSignedIn() && (isAdmin() || ('uid' in existing() && existing().uid == request.auth.uid));
+      allow list: if isSignedIn() && (isVerifiedAdminToken() || ('uid' in resource.data && resource.data.uid == request.auth.uid));
+      allow create: if isSignedIn() && isValidFcmToken(incoming());
+      allow update: if isSignedIn() && isValidFcmToken(incoming())
+        && existing().uid == request.auth.uid
+        && incoming().uid == existing().uid;
+      allow delete: if isSignedIn() && (isAdmin() || existing().uid == request.auth.uid);
+    }
+
+    // Unique Official Order Number registry (prevents PM-XXXXXX collisions; immutable once claimed)
+    match /orderNumbers/{orderNumber} {
+      allow get: if isValidId(orderNumber) && isAdmin();
+      allow list: if isVerifiedAdminToken();
+      allow create: if isValidId(orderNumber) && isAdmin() && isValidOrderNumberClaim(incoming(), orderNumber);
+      allow update, delete: if false;
+    }
+
+    // Immutable Admin Order Request Audit Trail (customers denied; admins append-only)
+    match /orderRequestAuditLogs/{auditId} {
+      allow get: if isValidId(auditId) && isAdmin();
+      allow list: if isVerifiedAdminToken();
+      allow create: if isValidId(auditId) && isAdmin() && isValidOrderRequestAuditLog(incoming());
+      allow update, delete: if false;
+    }
+
+    // Admins registry
+    match /admins/{adminId} {
+      allow get: if isValidId(adminId) && isSignedIn() && (request.auth.uid == adminId || isAdmin());
+      allow list: if isVerifiedAdminToken();
+      allow create, update, delete: if false;
+    }
+  }
+}

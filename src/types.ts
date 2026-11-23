@@ -1,6 +1,6 @@
 export type Language = 'ar' | 'en';
 
-export type PageView = 'menu' | 'checkout' | 'track' | 'account' | 'info';
+export type PageView = 'menu' | 'checkout' | 'track' | 'account' | 'info' | 'admin';
 
 export type OrderType = 'pickup' | 'delivery';
 
@@ -56,6 +56,10 @@ export interface MenuItem {
   categoryAr?: string;
   imageUrl: string;
   inStock: boolean;
+  isAvailable?: boolean;
+  available?: boolean;
+  outOfStock?: boolean;
+  stockQuantity?: number;
   prepTime?: string;
   supportsTemp?: boolean;
   supportsCustomization?: boolean;
@@ -144,8 +148,126 @@ export interface CartItem {
 
 export type OrderStatus = 'Pending' | 'Preparing' | 'Ready' | 'Completed' | 'Cancelled';
 
+export type OrderRequestStatus =
+  | 'pending_review'
+  | 'reviewing'
+  | 'verified'
+  | 'order_created'
+  | 'approved'
+  | 'rejected'
+  | 'cancelled';
+
 export type LegacyMilkOption = 'none' | 'regular' | 'coconut';
 export type LegacyTemperatureOption = 'Hot' | 'Cold';
+
+export interface OrderRequestCustomizationSelection {
+  groupId: string;
+  optionId: string;
+}
+
+export interface OrderRequestItem {
+  itemId: string;
+  quantity: number;
+  selectedSizeId?: string;
+  selectedCustomizations?: OrderRequestCustomizationSelection[];
+  temperature?: LegacyTemperatureOption;
+  milkOption?: LegacyMilkOption;
+  specialInstructions?: string;
+  name?: string;
+  nameAr?: string;
+}
+
+export interface VerifiedPricingLineItem {
+  itemId: string;
+  name: string;
+  nameAr?: string;
+  quantity: number;
+  basePriceSar: number;
+  customizationTotalSar: number;
+  unitPriceSar: number;
+  lineTotalSar: number;
+  selectedCustomizations?: SelectedCustomizationItem[];
+  temperature?: LegacyTemperatureOption;
+  milkOption?: LegacyMilkOption;
+  milkExtraPrice?: number;
+  specialInstructions?: string;
+  note: string;
+  imageUrl: string;
+  inStock: boolean;
+}
+
+export interface VerifiedPricingBreakdown {
+  currency: 'SAR';
+  orderType: 'pickup';
+  pricingVersion: number;
+  subtotalSar: number;
+  discountSar: number;
+  taxSar: number;
+  totalBillSar: number;
+  itemCount: number;
+  verifiedAtMs: number;
+  verifiedByUid: string;
+  verifiedByEmail?: string;
+  items: VerifiedPricingLineItem[];
+}
+
+export interface OrderRequest {
+  id: string;
+  requestId: string;
+  requestNumber: string;
+  customerUid: string;
+  customerName: string;
+  customerContact: string;
+  orderType: 'pickup';
+  currency: 'SAR';
+  lang?: Language;
+  orderNote?: string;
+  items: OrderRequestItem[];
+  status: OrderRequestStatus;
+  requestSource?: string;
+  reviewedBy?: string;
+  reviewedAtMs?: number;
+  verifiedBy?: string;
+  verifiedAtMs?: number;
+  verifiedTotalSar?: number;
+  verifiedPricing?: VerifiedPricingBreakdown;
+  approvedBy?: string;
+  approvedAtMs?: number;
+  approvedOrderId?: string;
+  approvedOrderNumber?: string;
+  rejectedBy?: string;
+  rejectedAtMs?: number;
+  rejectionReason?: string;
+  createdAtMs?: number;
+  updatedAtMs?: number;
+  duplicatePrevented?: boolean;
+}
+
+export type AdminOrderRequestAuditAction =
+  | 'start_review'
+  | 'verify_request'
+  | 'price_verification'
+  | 'approve_and_promote'
+  | 'reject_request'
+  | 'order_promotion'
+  | 'duplicate_approval_blocked'
+  | 'verification_blocked';
+
+export interface OrderRequestAuditEntry {
+  id: string;
+  requestId: string;
+  action: AdminOrderRequestAuditAction;
+  adminUid: string;
+  adminEmail?: string;
+  previousStatus?: OrderRequestStatus;
+  newStatus?: OrderRequestStatus;
+  approvedOrderId?: string;
+  approvedOrderNumber?: string;
+  verifiedTotalSar?: number;
+  reason?: string;
+  details?: string;
+  createdAtMs?: number;
+}
 
 export interface OrderLineItem {
   itemId: string;
@@ -176,9 +298,16 @@ export interface Order {
   orderNote?: string;
   items: OrderLineItem[];
   subtotal?: number;
+  discountTotal?: number;
+  taxTotal?: number;
   total: number;
   currency?: 'SAR';
   pricingVersion?: number;
+  sourceRequestId?: string;
+  paymentMethod?: 'pay_on_pickup';
+  paymentStatus?: 'unpaid' | 'paid';
+  approvedBy?: string;
+  approvedAtMs?: number;
   idempotentReplay?: boolean;
   status: OrderStatus;
   createdAtMs?: number;
@@ -187,9 +316,11 @@ export interface Order {
 
 export interface TrackedOrderMeta {
   id: string;
+  kind?: 'order' | 'request';
   orderNumber: string;
   whatsappUrl?: string;
   receiptSnapshot?: Order;
+  requestSnapshot?: OrderRequest;
 }
 
 export interface GeoLocation {

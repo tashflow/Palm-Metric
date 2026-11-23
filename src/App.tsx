@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
 import { BellOff, BellRing, Check } from 'lucide-react';
 import { AccountPage } from './components/AccountPage';
+import { AdminOrderRequestsPage } from './components/AdminOrderRequestsPage';
 import { CheckoutPage } from './components/CheckoutPage';
 import { FloatingCartBar } from './components/FloatingCartBar';
 import { MapsApiWrapper } from './components/GoogleMapsLocation';
@@ -13,6 +15,7 @@ import { OrderTrackerPage } from './components/OrderTrackerPage';
 import { COPY } from './data/i18n';
 import { canonicalizeProductId } from './data/menu';
 import { motion } from 'motion/react';
+import { firebaseUserToAdminActor, isVerifiedAdminActor } from './lib/adminAuth';
 import { migrateLegacyCartItems } from './lib/cart';
 import {
   fetchProductCustomizationOnce,
@@ -22,6 +25,7 @@ import {
 import {
   activeProjectId,
   auth,
+  db,
   ensureGuestFirebaseSession,
   signInWithGoogle,
 } from './lib/firebase';
@@ -46,6 +50,7 @@ import type {
   MenuItem,
   Order,
   OrderLineItem,
+  OrderRequest,
   PageView,
   StoreSettings,
   TempChoice,
@@ -58,11 +63,6 @@ const ACCOUNTS_KEY = 'palm_metric_accounts_v1';
 const SESSION_KEY = 'palm_metric_session_v1';
 const LANG_KEY = 'palm_metric_lang_v1';
 const ORDERS_KEY = 'palm_metric_orders_v1';
-const ADMIN_EMAILS = new Set([
-  'tashflow26@gmail.com',
-  'palmmatric1@gmail.com',
-  'tashfilartwork@gmail.com',
-]);
 
 export default function App() {
   const [lang, setLang] = useState<Language>(() => {
@@ -101,6 +101,7 @@ export default function App() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const [currentFirebaseUser, setCurrentFirebaseUser] = useState<User | null>(null);
+  const [isAdminDocPresent, setIsAdminDocPresent] = useState(false);
   const [seeding, setSeeding] = useState(false);
   const [mapsQuotaExceeded, setMapsQuotaExceeded] = useState(false);
 
@@ -173,6 +174,24 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    let active = true;
+    if (!currentFirebaseUser || currentFirebaseUser.isAnonymous || !currentFirebaseUser.emailVerified) {
+      setIsAdminDocPresent(false);
+      return;
+    }
+    void getDoc(doc(db, 'admins', currentFirebaseUser.uid))
+      .then((snap) => {
+        if (active) setIsAdminDocPresent(snap.exists());
+      })
+      .catch(() => {
+        if (active) setIsAdminDocPresent(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [currentFirebaseUser]);
+
+  useEffect(() => {
     const handleQuotaExceeded = () => setMapsQuotaExceeded(true);
     window.addEventListener('gmp-quota-exceeded', handleQuotaExceeded);
     return () => window.removeEventListener('gmp-quota-exceeded', handleQuotaExceeded);
@@ -192,7 +211,17 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!activeOrderId || !currentFirebaseUser || activeOrderId.startsWith('wa-')) {
+    const activeMeta = trackedOrders.find((o) => o.id === activeOrderId);
+    const isRequestTarget = Boolean(
+      activeOrderId &&
+        (activeOrderId.startsWith('req_') || activeMeta?.kind === 'request'),
+    );
+    if (
+      !activeOrderId ||
+      !currentFirebaseUser ||
+      activeOrderId.startsWith('wa-') ||
+      isRequestTarget
+    ) {
       setActiveLiveOrder(null);
       return;
     }
@@ -206,7 +235,7 @@ export default function App() {
       },
     );
     return () => unsub();
-  }, [activeOrderId, currentFirebaseUser]);
+  }, [activeOrderId, currentFirebaseUser, trackedOrders]);
 
   const isAlarmRinging = Boolean(
     activeLiveOrder &&
@@ -441,23 +470,35 @@ export default function App() {
     );
   };
 
-  const handleOrderPlaced = (
-    orderId: string,
-    orderNumber: string,
+  const handleRequestSubmitted = (
+    request: OrderRequest,
     whatsappUrl: string,
-    receiptOrder: Order,
   ) => {
     setTrackedOrders((prev) => {
-      const filtered = prev.filter((o) => o.id !== orderId);
-      return [{ id: orderId, orderNumber, whatsappUrl, receiptSnapshot: receiptOrder }, ...filtered].slice(0, 10);
+      const filtered = prev.filter((o) => o.id !== request.id);
+      return [
+        {
+          id: request.id,
+          kind: 'request' as const,
+          orderNumber: request.requestNumber,
+          whatsappUrl,
+          requestSnapshot: request,
+        },
+        ...filtered,
+      ].slice(0, 10);
     });
     try {
-      sessionStorage.setItem('palm_metric_return_track', orderId);
+      sessionStorage.setItem('palm_metric_return_track', request.id);
     } catch {
       // ignore storage failures
     }
-    setActiveOrderId(orderId);
-    setJustPlacedOrderId(orderId);
+    setActiveOrderId(request.id);
+    setJustPlacedOrderId(request.id);
+  };
+
+  const handleGoToTracker = (requestId: string) => {
+    setActiveOrderId(requestId);
+    setJustPlacedOrderId(requestId);
     navigate('track');
   };
 
@@ -673,10 +714,12 @@ export default function App() {
     [cart],
   );
 
-  const canSeedCatalog = Boolean(
-    currentFirebaseUser?.emailVerified &&
-      currentFirebaseUser.email &&
-      ADMIN_EMAILS.has(currentFirebaseUser.email.toLowerCase()),
+  const canSeedCatalog = useMemo(
+    () =>
+      isVerifiedAdminActor(
+        firebaseUserToAdminActor(currentFirebaseUser, isAdminDocPresent),
+      ),
+    [currentFirebaseUser, isAdminDocPresent],
   );
 
   const t = COPY[lang];
@@ -710,6 +753,7 @@ export default function App() {
           currentUser={currentUser}
           hasActiveOrder={Boolean(activeOrderId)}
           cartCount={cartCount}
+          showAdminNav={canSeedCatalog}
         />
 
         {isAlarmRinging && view !== 'track' && activeLiveOrder && (
@@ -808,7 +852,8 @@ export default function App() {
               onClearCart={() => setCart([])}
               onBackToMenu={() => navigate('menu')}
               onOpenAccount={() => navigate('account')}
-              onOrderPlaced={handleOrderPlaced}
+              onRequestSubmitted={handleRequestSubmitted}
+              onGoToTracker={handleGoToTracker}
             />
           </motion.div>
         )}
@@ -838,7 +883,11 @@ export default function App() {
                 setActiveOrderId(id);
                 setTrackedOrders((prev) => {
                   if (prev.some((o) => o.id === id)) return prev;
-                  return [{ id, orderNumber: id.slice(0, 8).toUpperCase() }, ...prev].slice(0, 10);
+                  const kind = id.startsWith('req_') ? ('request' as const) : ('order' as const);
+                  const orderNumber = id.startsWith('req_')
+                    ? `REQ-${id.replace(/^req_/, '').replace(/[^a-zA-Z0-9]/g, '').slice(-6).toUpperCase() || 'NEW'}`
+                    : id.slice(0, 8).toUpperCase();
+                  return [{ id, kind, orderNumber }, ...prev].slice(0, 10);
                 });
               }}
               onBackToMenu={() => navigate('menu')}
@@ -879,6 +928,27 @@ export default function App() {
               currentUser={currentUser}
               storeSettings={storeSettings}
               onBackToMenu={() => navigate('menu')}
+            />
+          </motion.div>
+        )}
+
+        {view === 'admin' && (
+          <motion.div
+            key="admin"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.25 }}
+          >
+            <AdminOrderRequestsPage
+              lang={lang}
+              firebaseUser={currentFirebaseUser}
+              isAdminDocPresent={isAdminDocPresent}
+              onSignInAdmin={handleGoogleSignIn}
+              onBackToMenu={() => navigate('menu')}
+              onInspectOrder={(orderId) => {
+                setActiveOrderId(orderId);
+                navigate('track');
+              }}
             />
           </motion.div>
         )}

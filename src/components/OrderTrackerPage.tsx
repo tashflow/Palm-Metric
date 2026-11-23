@@ -21,10 +21,22 @@ import {
 import type { User } from 'firebase/auth';
 import { BUSINESS } from '../data/menu';
 import { COPY } from '../data/i18n';
-import { subscribeCustomerOrders, subscribeOrder } from '../lib/firestoreSync';
+import {
+  subscribeCustomerOrderRequests,
+  subscribeCustomerOrders,
+  subscribeOrder,
+  subscribeOrderRequest,
+} from '../lib/firestoreSync';
 import { formatPrice } from '../lib/format';
 import { initFCM } from '../lib/fcm';
-import type { Language, Order, OrderStatus, TrackedOrderMeta } from '../types';
+import type {
+  Language,
+  Order,
+  OrderRequest,
+  OrderRequestStatus,
+  OrderStatus,
+  TrackedOrderMeta,
+} from '../types';
 import { StorageImage } from './MediaAsset';
 
 interface OrderTrackerPageProps {
@@ -58,6 +70,21 @@ function StatusIcon({ status }: { status: OrderStatus }) {
   }
 }
 
+function RequestStatusIcon({ status }: { status: OrderRequestStatus }) {
+  switch (status) {
+    case 'pending_review':
+    case 'reviewing':
+      return <Clock className="h-6 w-6 text-[#1A3C2F]" />;
+    case 'verified':
+    case 'order_created':
+    case 'approved':
+      return <CheckCircle2 className="h-6 w-6 text-[#1A3C2F]" />;
+    case 'rejected':
+    case 'cancelled':
+      return <XCircle className="h-6 w-6 text-[#912018]" />;
+  }
+}
+
 export function OrderTrackerPage({
   lang,
   firebaseUser,
@@ -75,7 +102,9 @@ export function OrderTrackerPage({
 }: OrderTrackerPageProps) {
   const t = COPY[lang];
   const [lookedUpOrder, setLookedUpOrder] = useState<Order | null>(null);
+  const [lookedUpRequest, setLookedUpRequest] = useState<OrderRequest | null>(null);
   const [customerOrders, setCustomerOrders] = useState<Order[]>([]);
+  const [customerRequests, setCustomerRequests] = useState<OrderRequest[]>([]);
   const [loading, setLoading] = useState<boolean>(
     Boolean(
       activeOrderId &&
@@ -91,41 +120,102 @@ export function OrderTrackerPage({
     Boolean(justPlacedOrderId && justPlacedOrderId === activeOrderId),
   );
 
+  const activeMeta = recentOrders.find((o) => o.id === activeOrderId);
+  const isTrackingRequest = Boolean(
+    activeOrderId &&
+      (activeOrderId.startsWith('req_') ||
+        activeMeta?.kind === 'request' ||
+        customerRequests.some((r) => r.id === activeOrderId)),
+  );
+
   useEffect(() => {
-    if (justPlacedOrderId && justPlacedOrderId === activeOrderId) {
+    if (justPlacedOrderId && justPlacedOrderId === activeOrderId && !isTrackingRequest) {
       setShowReceipt(true);
+    } else if (isTrackingRequest) {
+      setShowReceipt(false);
     }
-  }, [justPlacedOrderId, activeOrderId]);
+  }, [justPlacedOrderId, activeOrderId, isTrackingRequest]);
 
   useEffect(() => {
     if (!firebaseUser?.uid) {
       setCustomerOrders([]);
+      setCustomerRequests([]);
       return;
     }
 
-    const unsubList = subscribeCustomerOrders(
+    const unsubOrders = subscribeCustomerOrders(
       firebaseUser.uid,
       (orders) => {
         setCustomerOrders(orders);
-        if (!activeOrderId && orders.length > 0) {
-          onSelectOrderId(orders[0].id);
-        }
       },
       () => {
         // ignore secondary list errors if single order lookup works
       },
     );
 
-    return () => unsubList();
-  }, [firebaseUser?.uid, activeOrderId, onSelectOrderId]);
+    const unsubRequests = subscribeCustomerOrderRequests(
+      firebaseUser.uid,
+      (requests) => {
+        setCustomerRequests(requests);
+      },
+      () => {
+        // ignore secondary list errors
+      },
+    );
+
+    return () => {
+      unsubOrders();
+      unsubRequests();
+    };
+  }, [firebaseUser?.uid]);
+
+  useEffect(() => {
+    if (activeOrderId) return;
+    if (customerOrders.length > 0) {
+      onSelectOrderId(customerOrders[0].id);
+    } else if (customerRequests.length > 0) {
+      onSelectOrderId(customerRequests[0].id);
+    }
+  }, [activeOrderId, customerOrders, customerRequests, onSelectOrderId]);
 
   useEffect(() => {
     if (!activeOrderId || !firebaseUser || activeOrderId.startsWith('wa-')) {
       setLookedUpOrder(null);
+      setLookedUpRequest(null);
       setLoading(false);
       setError(null);
       return;
     }
+
+    if (isTrackingRequest) {
+      setLookedUpOrder(null);
+      setLoading(true);
+      setError(null);
+
+      const unsub = subscribeOrderRequest(
+        activeOrderId,
+        (liveReq) => {
+          setLookedUpRequest(liveReq);
+          setLoading(false);
+        },
+        (err) => {
+          const isPermDenied =
+            err.message.includes('Missing or insufficient permissions') ||
+            err.message.includes('permission-denied');
+          setError(
+            isPermDenied
+              ? t.trackPermissionDenied
+              : err.message && !err.message.startsWith('{')
+                ? err.message
+                : t.orderNotFoundDesc,
+          );
+          setLoading(false);
+        },
+      );
+      return () => unsub();
+    }
+
+    setLookedUpRequest(null);
 
     if (activeLiveOrder && activeLiveOrder.id === activeOrderId) {
       setLookedUpOrder(activeLiveOrder);
@@ -159,14 +249,28 @@ export function OrderTrackerPage({
     );
 
     return () => unsub();
-  }, [activeOrderId, firebaseUser, activeLiveOrder, t.trackPermissionDenied, t.orderNotFoundDesc]);
+  }, [
+    activeOrderId,
+    firebaseUser,
+    activeLiveOrder,
+    isTrackingRequest,
+    t.trackPermissionDenied,
+    t.orderNotFoundDesc,
+  ]);
 
-  const activeMeta = recentOrders.find((o) => o.id === activeOrderId);
-  const displayOrder: Order | null =
-    (activeLiveOrder && activeLiveOrder.id === activeOrderId ? activeLiveOrder : null) ??
-    lookedUpOrder ??
-    activeMeta?.receiptSnapshot ??
-    null;
+  const displayRequest: OrderRequest | null = isTrackingRequest
+    ? lookedUpRequest ??
+      customerRequests.find((r) => r.id === activeOrderId) ??
+      activeMeta?.requestSnapshot ??
+      null
+    : null;
+
+  const displayOrder: Order | null = !isTrackingRequest
+    ? (activeLiveOrder && activeLiveOrder.id === activeOrderId ? activeLiveOrder : null) ??
+      lookedUpOrder ??
+      activeMeta?.receiptSnapshot ??
+      null
+    : null;
 
   const [pushEnabled, setPushEnabled] = useState<boolean>(
     typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted',
@@ -262,12 +366,37 @@ export function OrderTrackerPage({
       </div>
 
       {(() => {
-        const mergedTabs = new Map<string, { id: string; orderNumber: string }>();
+        const mergedTabs = new Map<
+          string,
+          { id: string; label: string; kind: 'order' | 'request' }
+        >();
+        customerRequests.forEach((r) =>
+          mergedTabs.set(r.id, {
+            id: r.id,
+            label: `${r.requestNumber} · ${t.requestTypeBadge}`,
+            kind: 'request',
+          }),
+        );
         customerOrders.forEach((o) =>
-          mergedTabs.set(o.id, { id: o.id, orderNumber: o.orderNumber }),
+          mergedTabs.set(o.id, {
+            id: o.id,
+            label: o.orderNumber,
+            kind: 'order',
+          }),
         );
         recentOrders.forEach((m) => {
-          if (!mergedTabs.has(m.id)) mergedTabs.set(m.id, { id: m.id, orderNumber: m.orderNumber });
+          if (!mergedTabs.has(m.id)) {
+            const kind =
+              m.kind === 'request' || m.id.startsWith('req_') ? 'request' : 'order';
+            mergedTabs.set(m.id, {
+              id: m.id,
+              label:
+                kind === 'request'
+                  ? `${m.orderNumber} · ${t.requestTypeBadge}`
+                  : m.orderNumber,
+              kind,
+            });
+          }
         });
         const tabs = Array.from(mergedTabs.values());
         if (tabs.length <= 1) return null;
@@ -286,7 +415,7 @@ export function OrderTrackerPage({
                       : 'bg-[#132D23] border border-[#C9A227]/30 text-[#F5F0E6]'
                   }`}
                 >
-                  {meta.orderNumber}
+                  {meta.label}
                 </button>
               );
             })}
@@ -335,7 +464,7 @@ export function OrderTrackerPage({
         </div>
       )}
 
-      {!firebaseUser && !displayOrder ? (
+      {!firebaseUser && !displayOrder && !displayRequest ? (
         <div className="palm-card rounded-3xl p-8 sm:p-10 text-center space-y-4">
           <Clock className="mx-auto h-10 w-10 text-[#9E7C16]" />
           <h1 className="text-xl sm:text-2xl font-extrabold text-[#1A3C2F]">
@@ -386,13 +515,259 @@ export function OrderTrackerPage({
             {t.startOrderBtn}
           </button>
         </div>
-      ) : loading && !displayOrder ? (
+      ) : loading && !displayOrder && !displayRequest ? (
         <div className="palm-card rounded-3xl p-6 space-y-4">
           <div className="h-6 w-40 rounded bg-[#E4DAC4] animate-pulse" />
           <div className="h-20 w-full rounded-2xl bg-[#E4DAC4] animate-pulse" />
         </div>
-      ) : error && !displayOrder ? (
+      ) : error && !displayOrder && !displayRequest ? (
         <div className="palm-card rounded-3xl p-6 text-sm font-bold text-[#912018]">{error}</div>
+      ) : displayRequest ? (
+        (() => {
+          const requestSteps: { key: string; label: string; hint: string }[] = [
+            {
+              key: 'submitted',
+              label: t.requestStepSubmitted,
+              hint: t.requestStepSubmittedHint,
+            },
+            {
+              key: 'review',
+              label: t.requestStepReview,
+              hint: t.requestStepReviewHint,
+            },
+            {
+              key: 'verified',
+              label: t.requestStepVerified,
+              hint: t.requestStepVerifiedHint,
+            },
+            {
+              key: 'created',
+              label: t.requestStepOrderCreated,
+              hint: t.requestStepOrderCreatedHint,
+            },
+          ];
+
+          const isPromotedRequest =
+            displayRequest.status === 'order_created' || displayRequest.status === 'approved';
+          const reqStepIdx = isPromotedRequest
+            ? displayRequest.approvedOrderId
+              ? 3
+              : 2
+            : displayRequest.status === 'verified'
+              ? 2
+              : displayRequest.status === 'reviewing' ||
+                  displayRequest.status === 'pending_review'
+                ? 1
+                : 0;
+
+          return (
+            <div className="space-y-5">
+              <div className="palm-card rounded-3xl overflow-hidden">
+                <div className="border-b border-[#1A3C2F]/10 bg-[#EAE2D0] p-5 sm:p-7">
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2 text-xs font-bold text-[#4A6457]">
+                        <span className="font-en text-sm font-extrabold text-[#1A3C2F]">
+                          {displayRequest.requestNumber}
+                        </span>
+                        <span aria-hidden="true">·</span>
+                        <span>{displayRequest.customerName}</span>
+                        <span aria-hidden="true">·</span>
+                        <span className="rounded-lg bg-[#1A3C2F] px-2 py-0.5 text-[11px] font-bold text-[#C9A227]">
+                          {t.pickupLabel}
+                        </span>
+                        <span className="rounded-lg border border-[#C9A227]/60 bg-[#FFF8E1] px-2 py-0.5 text-[11px] font-extrabold text-[#7A5B06]">
+                          {t.requestTypeBadge}
+                        </span>
+                        {displayRequest.approvedOrderNumber && (
+                          <span className="rounded-lg bg-[#DCE8DE] px-2 py-0.5 font-en text-[11px] font-extrabold text-[#1E6B38]">
+                            {displayRequest.approvedOrderNumber}
+                          </span>
+                        )}
+                      </div>
+
+                      <h1 className="mt-2 text-2xl sm:text-3xl font-extrabold text-[#1A3C2F]">
+                        {displayRequest.status === 'pending_review' && t.requestStatusPendingTitle}
+                        {displayRequest.status === 'reviewing' && t.requestStatusReviewingTitle}
+                        {displayRequest.status === 'verified' && t.requestStatusVerifiedTitle}
+                        {isPromotedRequest && t.requestStatusApprovedTitle}
+                        {displayRequest.status === 'rejected' && t.requestStatusRejectedTitle}
+                        {displayRequest.status === 'cancelled' && t.requestStatusCancelledTitle}
+                      </h1>
+                    </div>
+
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#C9A227] shadow-[0_3px_0_#947210]">
+                      <RequestStatusIcon status={displayRequest.status} />
+                    </div>
+                  </div>
+
+                  {displayRequest.status !== 'rejected' &&
+                    displayRequest.status !== 'cancelled' && (
+                      <div className="mt-7 grid grid-cols-4 gap-2">
+                        {requestSteps.map((step, idx) => {
+                          const reached = idx <= reqStepIdx;
+                          const current = idx === reqStepIdx;
+                          return (
+                            <div key={step.key} className="flex flex-col">
+                              <div
+                                className={`h-2.5 w-full rounded-full transition-colors duration-300 ${
+                                  reached ? 'bg-[#1A3C2F]' : 'bg-[#D3C7AE]'
+                                }`}
+                              />
+                              <span
+                                className={`mt-2 text-xs sm:text-sm font-extrabold ${
+                                  current
+                                    ? 'text-[#1A3C2F]'
+                                    : reached
+                                      ? 'text-[#2B5947]'
+                                      : 'text-[#756C59]'
+                                }`}
+                              >
+                                {step.label}
+                              </span>
+                              <span className="hidden sm:block text-[11px] font-semibold text-[#546E61]">
+                                {step.hint}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                  {displayRequest.status === 'rejected' && displayRequest.rejectionReason && (
+                    <div className="mt-4 rounded-xl bg-[#FEE4E2] px-4 py-3 text-xs sm:text-sm font-bold text-[#912018]">
+                      {displayRequest.rejectionReason}
+                    </div>
+                  )}
+                </div>
+
+                <div className="p-5 sm:p-7 space-y-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-bold text-[#546E61]">
+                    <span>{t.requestReferenceLabel}</span>
+                    <span className="font-en text-[#1A3C2F]">{displayRequest.requestId}</span>
+                  </div>
+
+                  {displayRequest.orderNote && (
+                    <div className="rounded-xl bg-[#EAE2D0] px-4 py-3 text-xs sm:text-sm text-[#1A3C2F]">
+                      <span className="font-extrabold">{t.notesLabel}:</span>{' '}
+                      {displayRequest.orderNote}
+                    </div>
+                  )}
+
+                  <ul className="divide-y divide-[#1A3C2F]/10">
+                    {displayRequest.items.map((item, idx) => (
+                      <li key={`${item.itemId}-${idx}`} className="py-3 space-y-1">
+                        <p className="text-sm font-extrabold text-[#1A3C2F]">
+                          <span className="font-en text-[#9E7C16] me-1.5">
+                            {item.quantity}x
+                          </span>
+                          {lang === 'ar'
+                            ? item.nameAr || item.name || item.itemId
+                            : item.name || item.itemId}
+                          {item.temperature && (
+                            <span className="mx-1.5 text-xs font-bold text-[#8C6E10]">
+                              ({item.temperature === 'Hot' ? t.hotLabel : t.coldLabel})
+                            </span>
+                          )}
+                        </p>
+                        {(item.selectedSizeId ||
+                          (item.milkOption && item.milkOption !== 'none') ||
+                          (item.selectedCustomizations &&
+                            item.selectedCustomizations.length > 0)) && (
+                          <p className="text-xs text-[#4A6457]">
+                            {[
+                              item.selectedSizeId,
+                              item.milkOption && item.milkOption !== 'none'
+                                ? item.milkOption
+                                : undefined,
+                              ...(item.selectedCustomizations ?? []).map((c) => c.optionId),
+                            ]
+                              .filter(Boolean)
+                              .join(' · ')}
+                          </p>
+                        )}
+                        {item.specialInstructions && (
+                          <p className="text-xs text-[#546E61]">{item.specialInstructions}</p>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+
+                  {displayRequest.verifiedPricing ? (
+                    <div className="rounded-2xl border border-[#1E6B38]/30 bg-[#DCE8DE]/75 p-4 space-y-2.5 text-xs sm:text-sm">
+                      <p className="font-extrabold text-[#1A3C2F]">
+                        {t.requestVerifiedBreakdownTitle}
+                      </p>
+                      <ul className="space-y-1.5 text-xs text-[#1A3C2F]">
+                        {displayRequest.verifiedPricing.items.map((line, i) => (
+                          <li
+                            key={`${line.itemId}-${i}`}
+                            className="flex items-center justify-between gap-2 font-bold"
+                          >
+                            <span>
+                              <span className="font-en text-[#9E7C16] me-1">
+                                {line.quantity}x
+                              </span>
+                              {lang === 'ar' ? line.nameAr || line.name : line.name}
+                            </span>
+                            <span className="font-en tabular-nums">
+                              {formatPrice(line.lineTotalSar)} {t.currency}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                      <div className="border-t border-[#1A3C2F]/15 pt-2 flex items-center justify-between font-extrabold text-[#1A3C2F]">
+                        <span>{t.requestVerifiedTotalLabel}</span>
+                        <span className="font-en text-base text-[#1E6B38] tabular-nums">
+                          {formatPrice(displayRequest.verifiedPricing.totalBillSar)} {t.currency}
+                        </span>
+                      </div>
+                    </div>
+                  ) : displayRequest.verifiedTotalSar !== undefined ? (
+                    <div className="rounded-2xl border border-[#1E6B38]/30 bg-[#DCE8DE]/75 px-4 py-3 flex items-center justify-between text-xs sm:text-sm font-extrabold text-[#1A3C2F]">
+                      <span>{t.requestVerifiedTotalLabel}</span>
+                      <span className="font-en text-base text-[#1E6B38] tabular-nums">
+                        {formatPrice(displayRequest.verifiedTotalSar)} {t.currency}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-[#C9A227]/45 bg-[#FFF8E1] px-4 py-3 text-xs font-bold text-[#7A5B06]">
+                      {t.requestPendingPriceNotice}
+                    </div>
+                  )}
+
+                  {isPromotedRequest && displayRequest.approvedOrderId && (
+                    <button
+                      type="button"
+                      onClick={() => onSelectOrderId(displayRequest.approvedOrderId!)}
+                      className="palm-btn-gold flex w-full min-h-[48px] items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-extrabold cursor-pointer"
+                    >
+                      <PackageCheck className="h-4 w-4" />
+                      <span>
+                        {t.requestViewFinalOrderBtn}
+                        {displayRequest.approvedOrderNumber
+                          ? ` (${displayRequest.approvedOrderNumber})`
+                          : ''}
+                      </span>
+                    </button>
+                  )}
+
+                  {activeMeta?.whatsappUrl && (
+                    <a
+                      href={activeMeta.whatsappUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="palm-btn-forest flex w-full min-h-[48px] items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-extrabold"
+                    >
+                      <MessageCircle className="h-4 w-4 text-[#C9A227]" />
+                      <span>{t.requestSendWhatsappBtn}</span>
+                    </a>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })()
       ) : !displayOrder ? (
         <div className="palm-card rounded-3xl p-8 text-center">
           <h2 className="text-xl font-extrabold text-[#1A3C2F]">{t.orderNotFoundTitle}</h2>

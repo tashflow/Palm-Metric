@@ -1,6 +1,7 @@
 import {
   collection,
   doc,
+  getDoc,
   onSnapshot,
   query,
   serverTimestamp,
@@ -10,7 +11,6 @@ import {
   writeBatch,
   type DocumentData,
 } from 'firebase/firestore';
-import { httpsCallable } from 'firebase/functions';
 import { canonicalizeProductId, MENU_ITEMS, CATEGORIES } from '../data/menu';
 import type {
   Billboard,
@@ -20,6 +20,10 @@ import type {
   MenuItem,
   Order,
   OrderLineItem,
+  OrderRequest,
+  OrderRequestCustomizationSelection,
+  OrderRequestItem,
+  OrderRequestStatus,
   OrderStatus,
   OrderType,
   SelectedCustomizationItem,
@@ -30,7 +34,6 @@ import {
   auth,
   db,
   ensureGuestFirebaseSession,
-  functions,
   handleFirestoreError,
   OperationType,
   resolveStorageUrl,
@@ -561,17 +564,19 @@ export function buildCanonicalOrderPayload(
   };
 }
 
-export class BackendOrderError extends Error {
+export class OrderRequestError extends Error {
   readonly code: string;
   readonly reasonCode?: string;
 
   constructor(code: string, message: string, reasonCode?: string) {
     super(message);
-    this.name = 'BackendOrderError';
+    this.name = 'OrderRequestError';
     this.code = code;
     this.reasonCode = reasonCode;
   }
 }
+
+export const BackendOrderError = OrderRequestError;
 
 export interface CallableCreateOrderRequest {
   idempotencyKey: string;
@@ -591,23 +596,6 @@ export interface CallableCreateOrderRequest {
       optionId: string;
     }>;
   }>;
-}
-
-export interface VerifiedOrderResult {
-  id: string;
-  orderNumber: string;
-  customerUid: string;
-  customerName: string;
-  customerContact: string;
-  orderType: 'pickup';
-  currency: 'SAR';
-  status: OrderStatus;
-  notes: string;
-  subtotal: number;
-  totalBill: number;
-  pricingVersion: number;
-  idempotentReplay: boolean;
-  items: OrderLineItem[];
 }
 
 function fnv1aHex(input: string, seedOffset: number): string {
@@ -630,11 +618,28 @@ export function computeDeterministicIdempotencyKey(
   return `pm_${cleanNonce}_${h1}${h2}`.slice(0, 120);
 }
 
+export function computeStableOrderRequestId(
+  customerUid: string,
+  checkoutFingerprint: string,
+  attemptNonce: string,
+): string {
+  const cleanNonce = attemptNonce.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 28) || 'attempt';
+  const combined = `${customerUid.trim()}::${checkoutFingerprint}::${cleanNonce}`;
+  const h1 = fnv1aHex(combined, 0);
+  const h2 = fnv1aHex(combined.split('').reverse().join(''), 0x9e3779b9);
+  return `req_${cleanNonce}_${h1}${h2}`.slice(0, 120);
+}
+
+export function formatOrderRequestNumber(requestId: string): string {
+  const tail = requestId.replace(/^req_/, '').replace(/[^a-zA-Z0-9]/g, '').slice(-6).toUpperCase();
+  return `REQ-${tail || 'NEW'}`;
+}
+
 export function buildCallableCreateOrderPayload(
   input: CreateOrderInput & { idempotencyKey: string },
 ): CallableCreateOrderRequest {
   if (input.orderType !== 'pickup') {
-    throw new BackendOrderError('invalid-argument', 'Palm Metric supports pickup orders only.', 'INVALID_ORDER_TYPE');
+    throw new OrderRequestError('invalid-argument', 'Palm Metric supports pickup orders only.', 'INVALID_ORDER_TYPE');
   }
 
   const customerName = input.customerName.trim().slice(0, 80);
@@ -643,16 +648,16 @@ export function buildCallableCreateOrderPayload(
   const idempotencyKey = input.idempotencyKey.trim();
 
   if (!idempotencyKey || idempotencyKey.length < 8) {
-    throw new BackendOrderError('invalid-argument', 'Invalid idempotency key.', 'INVALID_IDEMPOTENCY_KEY');
+    throw new OrderRequestError('invalid-argument', 'Invalid idempotency key.', 'INVALID_IDEMPOTENCY_KEY');
   }
   if (!customerName) {
-    throw new BackendOrderError('invalid-argument', 'Customer name is required.', 'INVALID_CUSTOMER_NAME');
+    throw new OrderRequestError('invalid-argument', 'Customer name is required.', 'INVALID_CUSTOMER_NAME');
   }
   if (customerContact.length < 4) {
-    throw new BackendOrderError('invalid-argument', 'Mobile number must be at least 4 characters.', 'INVALID_CUSTOMER_CONTACT');
+    throw new OrderRequestError('invalid-argument', 'Mobile number must be at least 4 characters.', 'INVALID_CUSTOMER_CONTACT');
   }
   if (input.items.length === 0 || input.items.length > 50) {
-    throw new BackendOrderError('invalid-argument', 'Order must include between 1 and 50 items.', 'ITEMS_COUNT_OUT_OF_RANGE');
+    throw new OrderRequestError('invalid-argument', 'Order must include between 1 and 50 items.', 'ITEMS_COUNT_OUT_OF_RANGE');
   }
 
   return {
@@ -687,79 +692,430 @@ export function buildCallableCreateOrderPayload(
   };
 }
 
-function normalizeFirebaseFunctionsCode(rawCode: unknown): string {
-  const text = typeof rawCode === 'string' ? rawCode.trim().toLowerCase() : '';
-  return text.startsWith('functions/') ? text.slice('functions/'.length) : text || 'internal';
+export interface CreateOrderRequestItemInput {
+  itemId: string;
+  name?: string;
+  nameAr?: string;
+  quantity: number;
+  selectedSizeId?: string;
+  temperature?: 'Hot' | 'Cold';
+  milkOption?: 'none' | 'regular' | 'coconut';
+  specialInstructions?: string;
+  selectedCustomizations?: Array<{
+    groupId: string;
+    groupName?: string;
+    optionId: string;
+    optionName?: string;
+  }>;
 }
 
-export async function createVerifiedPalmMetricOrder(
-  input: CreateOrderInput & { idempotencyKey: string },
-): Promise<VerifiedOrderResult> {
-  const session = await ensureGuestFirebaseSession();
+export interface CreateOrderRequestInput {
+  requestId?: string;
+  attemptNonce?: string;
+  orderType: OrderType;
+  customerName: string;
+  customerPhone: string;
+  orderNote?: string;
+  items: CreateOrderRequestItemInput[];
+  lang?: Language;
+}
+
+export interface CustomerOrderRequestWritePayload {
+  requestId: string;
+  customerUid: string;
+  customerName: string;
+  customerContact: string;
+  orderType: 'pickup';
+  currency: 'SAR';
+  lang?: Language;
+  orderNote?: string;
+  items: OrderRequestItem[];
+  status: 'pending_review';
+  requestSource: 'customer-app-spark';
+}
+
+const VALID_ID_RX = /^[a-zA-Z0-9_-]{1,128}$/;
+
+function inferSizeIdFromSelectionOrProduct(
+  item: CreateOrderRequestItemInput,
+  canonicalId: string,
+): string | undefined {
+  if (typeof item.selectedSizeId === 'string' && item.selectedSizeId.trim()) {
+    return item.selectedSizeId.trim().slice(0, 80);
+  }
+  const sizeSelection = item.selectedCustomizations?.find(
+    (sel) =>
+      /^(size|cup[-_]?size)$/i.test(sel.groupId.trim()) ||
+      /size|حجم/i.test(`${sel.groupId} ${sel.groupName ?? ''}`),
+  );
+  if (sizeSelection?.optionId.trim()) {
+    return sizeSelection.optionId.trim().slice(0, 80);
+  }
+  if (canonicalId.endsWith('-small')) return 'small';
+  if (canonicalId.endsWith('-large')) return 'large';
+  return undefined;
+}
+
+function inferMilkSelectionFromCustomizations(
+  item: CreateOrderRequestItemInput,
+): 'none' | 'regular' | 'coconut' | undefined {
+  if (
+    item.milkOption === 'none' ||
+    item.milkOption === 'regular' ||
+    item.milkOption === 'coconut'
+  ) {
+    return item.milkOption;
+  }
+  const milkSel = item.selectedCustomizations?.find(
+    (sel) =>
+      sel.groupId === 'legacy-milk' ||
+      /milk|حليب/i.test(`${sel.groupId} ${sel.groupName ?? ''} ${sel.optionName ?? ''}`),
+  );
+  if (!milkSel) return undefined;
+  const blob = `${milkSel.optionId} ${milkSel.optionName ?? ''}`.toLowerCase();
+  if (/coconut|جوز\s*الهند/.test(blob)) return 'coconut';
+  if (/regular|عادي/.test(blob)) return 'regular';
+  return undefined;
+}
+
+export function buildCustomerOrderRequestPayload(
+  input: CreateOrderRequestInput,
+  customerUid: string,
+  requestId: string,
+): CustomerOrderRequestWritePayload {
+  const cleanUid = typeof customerUid === 'string' ? customerUid.trim() : '';
+  if (!cleanUid || cleanUid.length > 128) {
+    throw new GuestFirebaseAuthUnavailableError('auth/missing-uid');
+  }
+
+  const cleanRequestId = typeof requestId === 'string' ? requestId.trim() : '';
+  if (!/^[a-zA-Z0-9_-]{8,128}$/.test(cleanRequestId)) {
+    throw new OrderRequestError(
+      'invalid-argument',
+      'Invalid order request reference ID.',
+      'INVALID_REQUEST_ID',
+    );
+  }
+
+  if (input.orderType !== 'pickup') {
+    throw new OrderRequestError(
+      'invalid-argument',
+      'Palm Metric supports pickup order requests only.',
+      'INVALID_ORDER_TYPE',
+    );
+  }
+
+  const customerName = typeof input.customerName === 'string' ? input.customerName.trim().slice(0, 80) : '';
+  const customerContact = typeof input.customerPhone === 'string' ? input.customerPhone.trim().slice(0, 80) : '';
+  const orderNote = typeof input.orderNote === 'string' ? input.orderNote.trim().slice(0, 220) || undefined : undefined;
+
+  if (!customerName) {
+    throw new OrderRequestError('invalid-argument', 'Customer name is required.', 'INVALID_CUSTOMER_NAME');
+  }
+  if (customerContact.length < 4) {
+    throw new OrderRequestError(
+      'invalid-argument',
+      'Mobile number must be at least 4 characters.',
+      'INVALID_CUSTOMER_CONTACT',
+    );
+  }
+  if (!Array.isArray(input.items) || input.items.length === 0 || input.items.length > 50) {
+    throw new OrderRequestError(
+      'invalid-argument',
+      'Order request must include between 1 and 50 items.',
+      'ITEMS_COUNT_OUT_OF_RANGE',
+    );
+  }
+
+  const sanitizedItems: OrderRequestItem[] = input.items.map((rawItem) => {
+    const rawId = typeof rawItem?.itemId === 'string' ? rawItem.itemId.trim() : '';
+    const canonicalId = rawId ? canonicalizeProductId(rawId).trim() : '';
+    if (!canonicalId || !VALID_ID_RX.test(canonicalId)) {
+      throw new OrderRequestError(
+        'invalid-argument',
+        'Each item in the request must have a valid product item ID.',
+        'INVALID_ITEM_ID',
+      );
+    }
+
+    if (
+      typeof rawItem.quantity !== 'number' ||
+      !Number.isFinite(rawItem.quantity) ||
+      !Number.isInteger(rawItem.quantity) ||
+      rawItem.quantity < 1 ||
+      rawItem.quantity > 99
+    ) {
+      throw new OrderRequestError(
+        'invalid-argument',
+        'Item quantity must be a whole number between 1 and 99.',
+        'INVALID_QUANTITY',
+      );
+    }
+
+    const selectedCustomizations: OrderRequestCustomizationSelection[] | undefined = Array.isArray(
+      rawItem.selectedCustomizations,
+    )
+      ? rawItem.selectedCustomizations
+          .slice(0, 30)
+          .map((sel) => ({
+            groupId: typeof sel?.groupId === 'string' ? sel.groupId.trim().slice(0, 80) : '',
+            optionId: typeof sel?.optionId === 'string' ? sel.optionId.trim().slice(0, 80) : '',
+          }))
+          .filter((sel) => sel.groupId.length > 0 && sel.optionId.length > 0)
+      : undefined;
+
+    const selectedSizeId = inferSizeIdFromSelectionOrProduct(rawItem, canonicalId);
+    const milkOption = inferMilkSelectionFromCustomizations(rawItem);
+    const specialInstructions =
+      typeof rawItem.specialInstructions === 'string'
+        ? rawItem.specialInstructions.trim().slice(0, 160) || undefined
+        : undefined;
+    const cleanName =
+      typeof rawItem.name === 'string' && rawItem.name.trim()
+        ? rawItem.name.trim().slice(0, 120)
+        : undefined;
+    const cleanNameAr =
+      typeof rawItem.nameAr === 'string' && rawItem.nameAr.trim()
+        ? rawItem.nameAr.trim().slice(0, 120)
+        : undefined;
+
+    const entry: OrderRequestItem = {
+      itemId: canonicalId,
+      quantity: rawItem.quantity,
+    };
+    if (cleanName) entry.name = cleanName;
+    if (cleanNameAr) entry.nameAr = cleanNameAr;
+    if (selectedSizeId) entry.selectedSizeId = selectedSizeId;
+    if (selectedCustomizations && selectedCustomizations.length > 0) {
+      entry.selectedCustomizations = selectedCustomizations;
+    }
+    if (rawItem.temperature === 'Hot' || rawItem.temperature === 'Cold') {
+      entry.temperature = rawItem.temperature;
+    }
+    if (milkOption) {
+      entry.milkOption = milkOption;
+    }
+    if (specialInstructions) {
+      entry.specialInstructions = specialInstructions;
+    }
+
+    return entry;
+  });
+
+  return {
+    requestId: cleanRequestId,
+    customerUid: cleanUid,
+    customerName,
+    customerContact,
+    orderType: 'pickup',
+    currency: 'SAR',
+    ...(input.lang ? { lang: input.lang } : {}),
+    ...(orderNote ? { orderNote } : {}),
+    items: sanitizedItems,
+    status: 'pending_review',
+    requestSource: 'customer-app-spark',
+  };
+}
+
+export interface OrderRequestPersistenceAdapter {
+  ensureSession: () => Promise<{ user: { uid: string } | null; errorCode?: string }>;
+  getExistingRequest: (requestId: string) => Promise<DocumentData | null>;
+  createRequestDoc: (requestId: string, payload: Record<string, unknown>) => Promise<void>;
+  serverTimestampValue: () => unknown;
+}
+
+const defaultOrderRequestAdapter: OrderRequestPersistenceAdapter = {
+  ensureSession: ensureGuestFirebaseSession,
+  async getExistingRequest(requestId: string): Promise<DocumentData | null> {
+    const snap = await getDoc(doc(db, 'orderRequests', requestId));
+    return snap.exists() ? snap.data() : null;
+  },
+  async createRequestDoc(requestId: string, payload: Record<string, unknown>): Promise<void> {
+    await setDoc(doc(db, 'orderRequests', requestId), payload);
+  },
+  serverTimestampValue: () => serverTimestamp(),
+};
+
+function normalizeFirestoreErrorCode(err: unknown): string {
+  const raw =
+    typeof err === 'object' && err !== null && 'code' in err
+      ? String((err as { code?: unknown }).code ?? '')
+      : '';
+  return raw.trim().toLowerCase() || 'unknown';
+}
+
+export function normalizeOrderRequestStatus(raw: unknown): OrderRequestStatus {
+  const val = typeof raw === 'string' ? raw.trim().toLowerCase() : '';
+  if (val === 'pending_review' || val === 'pending') return 'pending_review';
+  if (val === 'reviewing' || val === 'in_review') return 'reviewing';
+  if (val === 'verified') return 'verified';
+  if (val === 'order_created') return 'order_created';
+  if (val === 'approved') return 'approved';
+  if (val === 'rejected' || val === 'declined') return 'rejected';
+  if (val === 'cancelled' || val === 'canceled') return 'cancelled';
+  return 'pending_review';
+}
+
+export function mapOrderRequestSnapshot(id: string, data: DocumentData): OrderRequest {
+  const rawItems = Array.isArray(data.items) ? data.items : [];
+  const items: OrderRequestItem[] = rawItems.map((it: DocumentData) => {
+    const itemId = String(it?.itemId ?? '');
+    const catalogMatch = findLocalCatalogMatch(itemId, String(it?.name ?? ''));
+    const selectedCustomizations = Array.isArray(it?.selectedCustomizations)
+      ? it.selectedCustomizations
+          .map((sel: DocumentData) => ({
+            groupId: String(sel?.groupId ?? ''),
+            optionId: String(sel?.optionId ?? ''),
+          }))
+          .filter((sel: OrderRequestCustomizationSelection) => sel.groupId && sel.optionId)
+      : undefined;
+
+    return {
+      itemId,
+      name: it?.name ? String(it.name) : catalogMatch?.nameEn,
+      nameAr: it?.nameAr ? String(it.nameAr) : catalogMatch?.nameAr,
+      quantity:
+        typeof it?.quantity === 'number' && Number.isFinite(it.quantity)
+          ? Math.max(1, Math.min(99, Math.round(it.quantity)))
+          : 1,
+      selectedSizeId: it?.selectedSizeId ? String(it.selectedSizeId) : undefined,
+      selectedCustomizations:
+        selectedCustomizations && selectedCustomizations.length > 0
+          ? selectedCustomizations
+          : undefined,
+      temperature:
+        it?.temperature === 'Hot' || it?.temperature === 'Cold' ? it.temperature : undefined,
+      milkOption:
+        it?.milkOption === 'none' ||
+        it?.milkOption === 'regular' ||
+        it?.milkOption === 'coconut'
+          ? it.milkOption
+          : undefined,
+      specialInstructions: it?.specialInstructions ? String(it.specialInstructions) : undefined,
+    };
+  });
+
+  const requestId = typeof data.requestId === 'string' && data.requestId ? data.requestId : id;
+  const rawVerifiedPricing =
+    data.verifiedPricing && typeof data.verifiedPricing === 'object'
+      ? (data.verifiedPricing as OrderRequest['verifiedPricing'])
+      : undefined;
+  const verifiedTotalSar =
+    typeof data.verifiedTotalSar === 'number' && Number.isFinite(data.verifiedTotalSar)
+      ? data.verifiedTotalSar
+      : rawVerifiedPricing && typeof rawVerifiedPricing.totalBillSar === 'number'
+        ? rawVerifiedPricing.totalBillSar
+        : undefined;
+
+  return {
+    id,
+    requestId,
+    requestNumber: formatOrderRequestNumber(requestId),
+    customerUid: String(data.customerUid ?? ''),
+    customerName: String(data.customerName ?? 'Guest'),
+    customerContact: String(data.customerContact ?? ''),
+    orderType: 'pickup',
+    currency: 'SAR',
+    lang: data.lang === 'ar' || data.lang === 'en' ? data.lang : undefined,
+    orderNote: data.orderNote ? String(data.orderNote) : undefined,
+    items,
+    status: normalizeOrderRequestStatus(data.status),
+    requestSource: data.requestSource ? String(data.requestSource) : undefined,
+    reviewedBy: data.reviewedBy ? String(data.reviewedBy) : undefined,
+    reviewedAtMs: extractTimestampMs(data.reviewedAt),
+    verifiedBy: data.verifiedBy ? String(data.verifiedBy) : undefined,
+    verifiedAtMs: extractTimestampMs(data.verifiedAt),
+    verifiedTotalSar,
+    verifiedPricing: rawVerifiedPricing,
+    approvedBy: data.approvedBy ? String(data.approvedBy) : undefined,
+    approvedAtMs: extractTimestampMs(data.approvedAt),
+    approvedOrderId: data.approvedOrderId ? String(data.approvedOrderId) : undefined,
+    approvedOrderNumber: data.approvedOrderNumber ? String(data.approvedOrderNumber) : undefined,
+    rejectedBy: data.rejectedBy ? String(data.rejectedBy) : undefined,
+    rejectedAtMs: extractTimestampMs(data.rejectedAt),
+    rejectionReason: data.rejectionReason ? String(data.rejectionReason) : undefined,
+    createdAtMs: extractTimestampMs(data.createdAt),
+    updatedAtMs: extractTimestampMs(data.updatedAt),
+  };
+}
+
+export async function submitCustomerOrderRequest(
+  input: CreateOrderRequestInput,
+  adapter: OrderRequestPersistenceAdapter = defaultOrderRequestAdapter,
+): Promise<OrderRequest> {
+  const session = await adapter.ensureSession();
   const realUid = session.user?.uid;
   if (!realUid) {
     throw new GuestFirebaseAuthUnavailableError(session.errorCode);
   }
 
-  const requestPayload = buildCallableCreateOrderPayload(input);
-  const createOrderFn = httpsCallable<CallableCreateOrderRequest, Record<string, unknown>>(
-    functions,
-    'createPalmMetricOrder',
-  );
+  const fingerprint = `${input.customerPhone.trim()}::${input.items
+    .map((i) => `${canonicalizeProductId(i.itemId)}x${i.quantity}`)
+    .join(',')}`;
+  const requestId =
+    input.requestId && /^[a-zA-Z0-9_-]{8,128}$/.test(input.requestId.trim())
+      ? input.requestId.trim()
+      : computeStableOrderRequestId(
+          realUid,
+          fingerprint,
+          input.attemptNonce || `r_${Date.now().toString(36)}`,
+        );
+
+  const payload = buildCustomerOrderRequestPayload(input, realUid, requestId);
 
   try {
-    const result = await createOrderFn(requestPayload);
-    const data = result.data;
-    if (!data || typeof data.orderId !== 'string' || typeof data.orderNumber !== 'string') {
-      throw new BackendOrderError('internal', 'Invalid response received from order backend.');
+    const existing = await adapter.getExistingRequest(requestId);
+    if (existing && String(existing.customerUid ?? '') === realUid) {
+      return {
+        ...mapOrderRequestSnapshot(requestId, existing),
+        duplicatePrevented: true,
+      };
     }
+  } catch {
+    // Proceed cleanly to write attempt if pre-read fails (e.g. strict offline / get-rule on missing doc)
+  }
 
-    const mappedOrder = mapOrderSnapshot(data.orderId, data as DocumentData);
+  const firestoreDoc: Record<string, unknown> = {
+    ...payload,
+    createdAt: adapter.serverTimestampValue(),
+    updatedAt: adapter.serverTimestampValue(),
+  };
 
+  try {
+    await adapter.createRequestDoc(requestId, firestoreDoc);
+    const nowMs = Date.now();
     return {
-      id: data.orderId,
-      orderNumber: data.orderNumber,
-      customerUid: typeof data.customerUid === 'string' ? data.customerUid : realUid,
-      customerName: mappedOrder.customerName,
-      customerContact: mappedOrder.customerPhone,
-      orderType: 'pickup',
-      currency: 'SAR',
-      status: mappedOrder.status,
-      notes: typeof data.notes === 'string' ? data.notes : 'Pickup',
-      subtotal: roundCurrency(Number(data.subtotal ?? data.totalBill ?? mappedOrder.total)),
-      totalBill: roundCurrency(Number(data.totalBill ?? mappedOrder.total)),
-      pricingVersion: typeof data.pricingVersion === 'number' ? data.pricingVersion : 1,
-      idempotentReplay: Boolean(data.idempotentReplay),
-      items: mappedOrder.items,
+      ...payload,
+      id: requestId,
+      requestNumber: formatOrderRequestNumber(requestId),
+      createdAtMs: nowMs,
+      updatedAtMs: nowMs,
+      duplicatePrevented: false,
     };
   } catch (err) {
-    if (err instanceof BackendOrderError || err instanceof GuestFirebaseAuthUnavailableError) {
+    if (err instanceof OrderRequestError || err instanceof GuestFirebaseAuthUnavailableError) {
       throw err;
     }
-    const errObj =
-      typeof err === 'object' && err !== null ? (err as Record<string, unknown>) : {};
-    const code = normalizeFirebaseFunctionsCode(errObj.code);
-    const details =
-      typeof errObj.details === 'object' && errObj.details !== null
-        ? (errObj.details as Record<string, unknown>)
-        : {};
-    const reasonCode =
-      typeof details.reasonCode === 'string' ? details.reasonCode : undefined;
-    const message =
-      err instanceof Error && err.message ? err.message : 'Unable to verify and place order.';
-    throw new BackendOrderError(code, message, reasonCode);
-  }
-}
 
-export async function createOrder(
-  input: CreateOrderInput,
-): Promise<VerifiedOrderResult> {
-  const randomNonce = `ord_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-  const key = computeDeterministicIdempotencyKey(
-    `${input.customerPhone}:${input.items.map((i) => `${i.itemId}x${i.quantity}`).join(',')}`,
-    randomNonce,
-  );
-  return createVerifiedPalmMetricOrder({ ...input, idempotencyKey: key });
+    const code = normalizeFirestoreErrorCode(err);
+    if (code.includes('already-exists') || code.includes('permission-denied')) {
+      try {
+        const existingAfterRace = await adapter.getExistingRequest(requestId);
+        if (existingAfterRace && String(existingAfterRace.customerUid ?? '') === realUid) {
+          return {
+            ...mapOrderRequestSnapshot(requestId, existingAfterRace),
+            duplicatePrevented: true,
+          };
+        }
+      } catch {
+        // Ignore follow-up read error and report original failure
+      }
+    }
+
+    const message =
+      err instanceof Error && err.message ? err.message : 'Unable to submit order request.';
+    throw new OrderRequestError(code, message);
+  }
 }
 
 export function mapOrderSnapshot(id: string, data: DocumentData): Order {
@@ -851,7 +1207,20 @@ export function mapOrderSnapshot(id: string, data: DocumentData): Order {
     mapsLink: data.mapsLink ? String(data.mapsLink) : undefined,
     orderNote: cleanedOrderNote,
     items,
+    subtotal: typeof data.subtotal === 'number' ? data.subtotal : undefined,
+    discountTotal: typeof data.discountTotal === 'number' ? data.discountTotal : undefined,
+    taxTotal: typeof data.taxTotal === 'number' ? data.taxTotal : undefined,
     total: Number(data.totalBill ?? data.total ?? 0),
+    currency: data.currency === 'SAR' ? 'SAR' : undefined,
+    pricingVersion: typeof data.pricingVersion === 'number' ? data.pricingVersion : undefined,
+    sourceRequestId: data.sourceRequestId ? String(data.sourceRequestId) : undefined,
+    paymentMethod: data.paymentMethod === 'pay_on_pickup' ? 'pay_on_pickup' : undefined,
+    paymentStatus:
+      data.paymentStatus === 'paid' || data.paymentStatus === 'unpaid'
+        ? data.paymentStatus
+        : undefined,
+    approvedBy: data.approvedBy ? String(data.approvedBy) : undefined,
+    approvedAtMs: extractTimestampMs(data.approvedAt),
     status: normalizedStatus,
     createdAtMs: extractTimestampMs(data.createdAt),
     updatedAtMs: extractTimestampMs(data.updatedAt),
@@ -913,6 +1282,71 @@ export function subscribeCustomerOrders(
     (error) => {
       try {
         handleFirestoreError(error, OperationType.LIST, 'orders');
+      } catch (wrapped) {
+        onError?.(wrapped instanceof Error ? wrapped : new Error(String(wrapped)));
+      }
+    },
+  );
+}
+
+export function subscribeOrderRequest(
+  requestId: string,
+  onData: (request: OrderRequest | null) => void,
+  onError: (err: Error) => void,
+): () => void {
+  if (!auth.currentUser || !requestId) {
+    onData(null);
+    return () => {};
+  }
+
+  const path = `orderRequests/${requestId}`;
+  const reqDocRef = doc(db, 'orderRequests', requestId);
+
+  return onSnapshot(
+    reqDocRef,
+    (snapshot) => {
+      if (!snapshot.exists()) {
+        onData(null);
+        return;
+      }
+      onData(mapOrderRequestSnapshot(snapshot.id, snapshot.data()));
+    },
+    (error) => {
+      try {
+        handleFirestoreError(error, OperationType.GET, path);
+      } catch (wrapped) {
+        onError(wrapped instanceof Error ? wrapped : new Error(String(wrapped)));
+      }
+    },
+  );
+}
+
+export function subscribeCustomerOrderRequests(
+  customerUid: string,
+  onData: (requests: OrderRequest[]) => void,
+  onError?: (err: Error) => void,
+): () => void {
+  if (!customerUid) {
+    onData([]);
+    return () => {};
+  }
+
+  const requestsQuery = query(
+    collection(db, 'orderRequests'),
+    where('customerUid', '==', customerUid),
+  );
+
+  return onSnapshot(
+    requestsQuery,
+    (snapshot) => {
+      const list = snapshot.docs
+        .map((d) => mapOrderRequestSnapshot(d.id, d.data()))
+        .sort((a, b) => (b.createdAtMs ?? 0) - (a.createdAtMs ?? 0));
+      onData(list);
+    },
+    (error) => {
+      try {
+        handleFirestoreError(error, OperationType.LIST, 'orderRequests');
       } catch (wrapped) {
         onError?.(wrapped instanceof Error ? wrapped : new Error(String(wrapped)));
       }

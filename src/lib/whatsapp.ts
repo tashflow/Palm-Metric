@@ -156,3 +156,103 @@ export function buildOrderLineItems(cart: CartItem[]): OrderLineItem[] {
     };
   });
 }
+
+export interface OrderRequestWhatsAppLine {
+  itemId: string;
+  name?: string;
+  nameAr?: string;
+  nameEn?: string;
+  quantity: number;
+  temperature?: 'Hot' | 'Cold';
+  milkOption?: 'none' | 'regular' | 'coconut';
+  selectedSizeId?: string;
+  specialInstructions?: string;
+  selectedCustomizations?: Array<{
+    groupId: string;
+    optionId: string;
+    groupName?: string;
+    groupNameAr?: string;
+    optionName?: string;
+    optionNameAr?: string;
+  }>;
+}
+
+export function buildBilingualOrderRequestWhatsAppSummary(params: {
+  requestNumber: string;
+  requestId: string;
+  items: OrderRequestWhatsAppLine[];
+  customerName: string;
+  customerPhone: string;
+  orderNote?: string;
+  whatsappNumber?: string;
+}): string {
+  const lines: string[] = [];
+  lines.push('🌴 *Palm Metric | بالم مترك*');
+  lines.push('*ORDER REQUEST — AWAITING ADMIN CONFIRMATION*');
+  lines.push('*طلب مبدئي — بانتظار تأكيد الإدارة والسعر النهائي*');
+  lines.push(`*Request Ref / مرجع الطلب المبدئي:* ${params.requestNumber} (${params.requestId})`);
+  lines.push('*Service Mode / طريقة الاستلام:* Pickup | استلام من الفرع');
+  lines.push('---------------------------');
+  lines.push('*Requested Items / الأصناف المطلوبة:*');
+
+  params.items.forEach((item) => {
+    const tempSuffix = item.temperature
+      ? item.temperature === 'Hot'
+        ? ' (Hot / حار)'
+        : ' (Cold / بارد)'
+      : '';
+
+    const nameEn = item.nameEn || item.name || item.itemId;
+    const nameAr = item.nameAr;
+    const displayTitle =
+      nameAr && nameEn && nameAr !== nameEn ? `${nameEn} / ${nameAr}` : nameEn;
+
+    lines.push(`• ${item.quantity}x ${displayTitle}${tempSuffix}`);
+
+    if (item.selectedSizeId) {
+      lines.push(`  - Size / الحجم: ${item.selectedSizeId}`);
+    }
+    if (item.milkOption && item.milkOption !== 'none') {
+      const milkLabel =
+        item.milkOption === 'coconut'
+          ? 'Coconut Milk / حليب جوز الهند'
+          : 'Regular Milk / حليب عادي';
+      lines.push(`  - Milk / الحليب: ${milkLabel}`);
+    }
+    if (item.selectedCustomizations && item.selectedCustomizations.length > 0) {
+      item.selectedCustomizations.forEach((sel) => {
+        const gLabel =
+          sel.groupNameAr && sel.groupName && sel.groupNameAr !== sel.groupName
+            ? `${sel.groupName} / ${sel.groupNameAr}`
+            : sel.groupName || sel.groupId;
+        const oLabel =
+          sel.optionNameAr && sel.optionName && sel.optionNameAr !== sel.optionName
+            ? `${sel.optionName} / ${sel.optionNameAr}`
+            : sel.optionName || sel.optionId;
+        lines.push(`  - ${gLabel}: ${oLabel}`);
+      });
+    }
+    if (item.specialInstructions?.trim()) {
+      lines.push(`  - Special Instructions / ملاحظات: ${item.specialInstructions.trim()}`);
+    }
+  });
+
+  lines.push('---------------------------');
+  lines.push(
+    '*Price & Confirmation / السعر والتأكيد:* Pending Admin Verification (SAR) | بانتظار مراجعة وتأكيد الإدارة بالريال السعودي',
+  );
+  lines.push(`*Customer / العميل:* ${params.customerName}`);
+  lines.push(`*Mobile / الجوال:* ${params.customerPhone}`);
+
+  if (params.orderNote?.trim()) {
+    lines.push(`*Notes / ملاحظات:* ${params.orderNote.trim()}`);
+  }
+  lines.push(
+    '⏳ Status: Awaiting Admin review — not confirmed for preparation yet / بانتظار مراجعة الإدارة',
+  );
+
+  const targetWhatsapp =
+    params.whatsappNumber?.replace(/[^\d]/g, '') || BUSINESS.whatsappNumber;
+  return `https://wa.me/${targetWhatsapp}?text=${encodeURIComponent(lines.join('\n'))}`;
+}
+

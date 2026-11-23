@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   ArrowLeft,
   ArrowRight,
+  CheckCircle2,
   Clock,
   MessageCircle,
   Minus,
@@ -16,10 +17,11 @@ import type { User } from 'firebase/auth';
 import { COPY } from '../data/i18n';
 import { auth, ensureGuestFirebaseSession } from '../lib/firebase';
 import {
-  BackendOrderError,
-  computeDeterministicIdempotencyKey,
-  createVerifiedPalmMetricOrder,
+  computeStableOrderRequestId,
   GuestFirebaseAuthUnavailableError,
+  OrderRequestError,
+  submitCustomerOrderRequest,
+  type CreateOrderRequestItemInput,
 } from '../lib/firestoreSync';
 import {
   auditCartItemAgainstLiveCatalog,
@@ -32,19 +34,104 @@ import {
 } from '../lib/customizationSync';
 import { formatPrice, getItemTitle, roundCurrency } from '../lib/format';
 import { unlockOrderAlarmAudio } from '../lib/readyAlarm';
-import { buildBilingualWhatsAppSummary, buildOrderLineItems } from '../lib/whatsapp';
+import {
+  buildBilingualOrderRequestWhatsAppSummary,
+  buildBilingualWhatsAppSummary,
+  type OrderRequestWhatsAppLine,
+} from '../lib/whatsapp';
 import type {
   CartItem,
   Language,
   MenuItem,
-  Order,
+  OrderRequest,
   OrderType,
   StoreSettings,
   UserAccount,
 } from '../types';
 import { motion } from 'motion/react';
 
-export { buildBilingualWhatsAppSummary };
+export { buildBilingualOrderRequestWhatsAppSummary, buildBilingualWhatsAppSummary };
+
+export function buildOrderRequestItemsFromCart(
+  cart: CartItem[],
+): CreateOrderRequestItemInput[] {
+  return cart.map((item) => {
+    const temperature = item.temp
+      ? item.temp === 'hot'
+        ? ('Hot' as const)
+        : ('Cold' as const)
+      : undefined;
+    const specialInstructions = item.note.trim() ? item.note.trim().slice(0, 160) : undefined;
+    const selectedCustomizations =
+      Array.isArray(item.customizations) && item.customizations.length > 0
+        ? item.customizations.map((sel) => ({
+            groupId: sel.groupId,
+            groupName: sel.groupName,
+            optionId: sel.optionId,
+            optionName: sel.optionName,
+          }))
+        : undefined;
+
+    return {
+      itemId: item.itemId,
+      name: item.name,
+      ...(item.nameAr ? { nameAr: item.nameAr } : {}),
+      quantity: item.quantity,
+      ...(temperature ? { temperature } : {}),
+      ...(specialInstructions ? { specialInstructions } : {}),
+      ...(selectedCustomizations ? { selectedCustomizations } : {}),
+    };
+  });
+}
+
+function buildWhatsAppRequestLinesFromCart(cart: CartItem[]): OrderRequestWhatsAppLine[] {
+  return cart.map((item) => {
+    const temperature = item.temp
+      ? item.temp === 'hot'
+        ? ('Hot' as const)
+        : ('Cold' as const)
+      : undefined;
+    const milkSel = item.customizations?.find(
+      (sel) =>
+        sel.groupId === 'legacy-milk' ||
+        /milk|حليب/i.test(`${sel.groupId} ${sel.groupName} ${sel.optionName}`),
+    );
+    const milkOption = milkSel
+      ? /coconut|جوز\s*الهند/i.test(`${milkSel.optionId} ${milkSel.optionName} ${milkSel.optionNameAr || ''}`)
+        ? ('coconut' as const)
+        : ('regular' as const)
+      : undefined;
+    const sizeSel = item.customizations?.find(
+      (sel) =>
+        /^(size|cup[-_]?size)$/i.test(sel.groupId.trim()) ||
+        /size|حجم/i.test(`${sel.groupId} ${sel.groupName}`),
+    );
+
+    return {
+      itemId: item.itemId,
+      name: item.name,
+      nameEn: item.nameEn,
+      nameAr: item.nameAr,
+      quantity: item.quantity,
+      ...(temperature ? { temperature } : {}),
+      ...(milkOption ? { milkOption } : {}),
+      ...(sizeSel ? { selectedSizeId: sizeSel.optionId } : {}),
+      ...(item.note.trim() ? { specialInstructions: item.note.trim().slice(0, 160) } : {}),
+      ...(item.customizations && item.customizations.length > 0
+        ? {
+            selectedCustomizations: item.customizations.map((sel) => ({
+              groupId: sel.groupId,
+              optionId: sel.optionId,
+              groupName: sel.groupName,
+              groupNameAr: sel.groupNameAr,
+              optionName: sel.optionName,
+              optionNameAr: sel.optionNameAr,
+            })),
+          }
+        : {}),
+    };
+  });
+}
 
 interface CheckoutPageProps {
   lang: Language;
@@ -64,12 +151,8 @@ interface CheckoutPageProps {
   onClearCart: () => void;
   onBackToMenu: () => void;
   onOpenAccount: () => void;
-  onOrderPlaced: (
-    orderId: string,
-    orderNumber: string,
-    whatsappUrl: string,
-    receiptOrder: Order,
-  ) => void;
+  onRequestSubmitted: (request: OrderRequest, whatsappUrl: string) => void;
+  onGoToTracker: (requestId: string) => void;
 }
 
 export function CheckoutPage({
@@ -86,7 +169,8 @@ export function CheckoutPage({
   onClearCart,
   onBackToMenu,
   onOpenAccount,
-  onOrderPlaced,
+  onRequestSubmitted,
+  onGoToTracker,
 }: CheckoutPageProps) {
   const t = COPY[lang];
   const orderType: OrderType = 'pickup';
@@ -97,10 +181,16 @@ export function CheckoutPage({
   const [customerPhone, setCustomerPhone] = useState(currentUser?.phone ?? '');
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const submittingLockRef = useRef(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [attemptNonce, setAttemptNonce] = useState(() =>
     `chk_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
   );
+  const [confirmedSubmission, setConfirmedSubmission] = useState<{
+    request: OrderRequest;
+    whatsappUrl: string;
+    whatsappLines: OrderRequestWhatsAppLine[];
+  } | null>(null);
 
   useEffect(() => {
     if (!customerName && firebaseUser?.displayName && !currentUser) {
@@ -162,7 +252,7 @@ export function CheckoutPage({
     [cartAuditMap],
   );
 
-  const subtotal = useMemo(
+  const estimatedSubtotal = useMemo(
     () => roundCurrency(cart.reduce((sum, item) => sum + item.price * item.quantity, 0)),
     [cart],
   );
@@ -177,13 +267,11 @@ export function CheckoutPage({
     return `${cartSig}::${effectiveName}::${effectivePhone}::${notes.trim()}`;
   }, [cart, effectiveName, effectivePhone, notes]);
 
-  const idempotencyKey = useMemo(
-    () => computeDeterministicIdempotencyKey(checkoutFingerprint, attemptNonce),
-    [checkoutFingerprint, attemptNonce],
-  );
-
   const handlePlaceOrder = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submittingLockRef.current || submitting) {
+      return;
+    }
     setFormError(null);
 
     if (cart.length === 0) {
@@ -203,116 +291,92 @@ export function CheckoutPage({
       return;
     }
 
-    void unlockOrderAlarmAudio();
+    submittingLockRef.current = true;
     setSubmitting(true);
+    void unlockOrderAlarmAudio();
+
     try {
-      if (!auth.currentUser) {
+      let realUid = auth.currentUser?.uid;
+      if (!realUid) {
         const session = await ensureGuestFirebaseSession();
-        if (!session.user?.uid) {
+        realUid = session.user?.uid;
+        if (!realUid) {
           throw new GuestFirebaseAuthUnavailableError(session.errorCode);
         }
       }
 
-      const orderItems = buildOrderLineItems(cart);
+      const stableRequestId = computeStableOrderRequestId(
+        realUid,
+        checkoutFingerprint,
+        attemptNonce,
+      );
+      const requestItems = buildOrderRequestItemsFromCart(cart);
+      const whatsappLines = buildWhatsAppRequestLinesFromCart(cart);
       const orderNoteClean = notes.trim() || undefined;
 
-      const verifiedOrder = await createVerifiedPalmMetricOrder({
-        idempotencyKey,
+      const submittedRequest = await submitCustomerOrderRequest({
+        requestId: stableRequestId,
+        attemptNonce,
         orderType,
         customerName: effectiveName,
         customerPhone: effectivePhone,
         orderNote: orderNoteClean,
-        items: orderItems,
-        total: subtotal,
+        items: requestItems,
         lang,
       });
 
-      const whatsappUrl = buildBilingualWhatsAppSummary({
-        orderNumber: verifiedOrder.orderNumber,
-        orderId: verifiedOrder.id,
-        orderType: verifiedOrder.orderType,
-        items: verifiedOrder.items,
-        total: verifiedOrder.totalBill,
-        customerName: verifiedOrder.customerName,
-        customerPhone: verifiedOrder.customerContact,
+      const whatsappUrl = buildBilingualOrderRequestWhatsAppSummary({
+        requestNumber: submittedRequest.requestNumber,
+        requestId: submittedRequest.requestId,
+        items: whatsappLines,
+        customerName: submittedRequest.customerName,
+        customerPhone: submittedRequest.customerContact,
         orderNote: orderNoteClean,
         whatsappNumber: storeSettings?.whatsappNumber,
       });
 
-      const nowMs = Date.now();
-      const receiptOrder: Order = {
-        id: verifiedOrder.id,
-        orderNumber: verifiedOrder.orderNumber,
-        customerUid: verifiedOrder.customerUid,
-        orderType: verifiedOrder.orderType,
-        customerName: verifiedOrder.customerName,
-        customerPhone: verifiedOrder.customerContact,
-        orderNote: orderNoteClean,
-        items: verifiedOrder.items,
-        subtotal: verifiedOrder.subtotal,
-        total: verifiedOrder.totalBill,
-        currency: verifiedOrder.currency,
-        pricingVersion: verifiedOrder.pricingVersion,
-        idempotentReplay: verifiedOrder.idempotentReplay,
-        status: verifiedOrder.status,
-        createdAtMs: nowMs,
-        updatedAtMs: nowMs,
-      };
-
-      // Rotate nonce cleanly so any future order gets a distinct idempotency key
+      // Rotate nonce & clear cart ONLY after Firestore confirms request creation
       setAttemptNonce(
         `chk_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
       );
       onClearCart();
-      onOrderPlaced(verifiedOrder.id, verifiedOrder.orderNumber, whatsappUrl, receiptOrder);
-
-      const isMobileDevice =
-        /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
-        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-      if (isMobileDevice) {
-        window.location.assign(whatsappUrl);
-      } else {
-        const anchor = document.createElement('a');
-        anchor.href = whatsappUrl;
-        anchor.target = '_blank';
-        anchor.rel = 'noopener noreferrer';
-        document.body.appendChild(anchor);
-        anchor.click();
-        document.body.removeChild(anchor);
-      }
+      onRequestSubmitted(submittedRequest, whatsappUrl);
+      setConfirmedSubmission({
+        request: submittedRequest,
+        whatsappUrl,
+        whatsappLines,
+      });
     } catch (err) {
+      // Preserve cart, form inputs, and attemptNonce cleanly on failure
       if (err instanceof GuestFirebaseAuthUnavailableError) {
         setFormError(t.errSessionRequired);
-      } else if (err instanceof BackendOrderError) {
+      } else if (err instanceof OrderRequestError) {
         if (err.code === 'unauthenticated') {
           setFormError(t.errSessionRequired);
-        } else if (err.code === 'unavailable' || err.code === 'internal') {
-          setFormError(t.errBackendUnavailable);
-        } else if (
-          err.reasonCode === 'OUT_OF_STOCK' ||
-          err.reasonCode === 'UNKNOWN_PRODUCT' ||
-          err.reasonCode === 'INVALID_OR_DISABLED_OPTION' ||
-          err.reasonCode === 'INVALID_OR_DISABLED_GROUP' ||
-          err.reasonCode === 'CUSTOMIZATIONS_DISABLED' ||
-          err.reasonCode === 'REQUIRED_GROUP_MISSING' ||
-          err.reasonCode === 'BROKEN_REQUIRED_GROUP'
-        ) {
-          setFormError(t.errOutOfStockCheckout);
+        } else if (err.reasonCode === 'INVALID_ITEM_ID') {
+          setFormError(t.errInvalidItem);
+        } else if (err.reasonCode === 'INVALID_QUANTITY') {
+          setFormError(t.errInvalidQuantity);
+        } else if (err.reasonCode === 'INVALID_CUSTOMER_NAME') {
+          setFormError(t.errNameRequired);
+        } else if (err.reasonCode === 'INVALID_CUSTOMER_CONTACT') {
+          setFormError(t.errPhoneRequired);
         } else {
           setFormError(
             err.message && !err.message.startsWith('{')
               ? err.message
-              : t.errBackendValidationFailed,
+              : t.errRequestSubmitFailed,
           );
         }
       } else {
         const msg =
           err instanceof Error && !err.message.startsWith('{')
             ? err.message
-            : t.errBackendValidationFailed;
+            : t.errRequestSubmitFailed;
         setFormError(msg);
       }
     } finally {
+      submittingLockRef.current = false;
       setSubmitting(false);
     }
   };
@@ -332,11 +396,126 @@ export function CheckoutPage({
         </button>
 
         <h1 className="text-xl sm:text-2xl font-extrabold text-[#F5F0E6]">
-          {t.checkoutTitle}
+          {t.requestCheckoutTitle}
         </h1>
       </div>
 
-      {cart.length === 0 ? (
+      {confirmedSubmission ? (
+        <div className="palm-card mt-6 rounded-3xl p-6 sm:p-8 space-y-5">
+          <div className="flex flex-wrap items-start justify-between gap-4 border-b border-[#1A3C2F]/10 pb-5">
+            <div className="space-y-2">
+              <span className="inline-flex items-center gap-1.5 rounded-lg bg-[#FFF8E1] border border-[#C9A227]/60 px-3 py-1 text-xs font-extrabold text-[#7A5B06]">
+                <Clock className="h-3.5 w-3.5" />
+                <span>{t.requestAwaitingAdminBadge}</span>
+              </span>
+              <h2 className="text-xl sm:text-2xl font-extrabold text-[#1A3C2F]">
+                {t.requestSubmittedTitle}
+              </h2>
+              <p className="text-xs sm:text-sm text-[#3B594B] leading-relaxed">
+                {t.requestSubmittedSubtitle}
+              </p>
+            </div>
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#1A3C2F] text-[#C9A227]">
+              <CheckCircle2 className="h-6 w-6" />
+            </div>
+          </div>
+
+          {confirmedSubmission.request.duplicatePrevented && (
+            <p className="rounded-xl border border-[#C9A227]/50 bg-[#FFF8E1] px-3.5 py-2.5 text-xs font-bold text-[#7A5B06]">
+              {t.requestDuplicateNotice}
+            </p>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-2xl bg-[#EAE2D0] p-4 text-xs sm:text-sm text-[#1A3C2F]">
+            <div>
+              <span className="block text-[11px] font-bold text-[#546E61]">
+                {t.requestReferenceLabel}
+              </span>
+              <span className="font-en text-base font-extrabold">
+                {confirmedSubmission.request.requestNumber}
+              </span>
+              <span className="block font-en text-[11px] text-[#546E61] break-all">
+                {confirmedSubmission.request.requestId}
+              </span>
+            </div>
+            <div>
+              <span className="block text-[11px] font-bold text-[#546E61]">
+                {t.orderTypeTitle}
+              </span>
+              <span className="font-extrabold">{t.pickupLabel}</span>
+            </div>
+            <div>
+              <span className="block text-[11px] font-bold text-[#546E61]">
+                {t.nameLabel}
+              </span>
+              <span className="font-bold">{confirmedSubmission.request.customerName}</span>
+            </div>
+            <div>
+              <span className="block text-[11px] font-bold text-[#546E61]">
+                {t.phoneLabel}
+              </span>
+              <span className="font-en font-bold" dir="ltr">
+                {confirmedSubmission.request.customerContact}
+              </span>
+            </div>
+          </div>
+
+          <ul className="divide-y divide-[#1A3C2F]/10 rounded-2xl border border-[#1A3C2F]/10 bg-white/70 px-4">
+            {confirmedSubmission.whatsappLines.map((line, idx) => (
+              <li key={`${line.itemId}-${idx}`} className="py-3 text-xs sm:text-sm text-[#1A3C2F]">
+                <p className="font-extrabold">
+                  <span className="font-en text-[#9E7C16] me-1.5">{line.quantity}x</span>
+                  {lang === 'ar' ? line.nameAr || line.name || line.itemId : line.nameEn || line.name || line.itemId}
+                  {line.temperature && (
+                    <span className="mx-1.5 text-xs font-bold text-[#8C6E10]">
+                      ({line.temperature === 'Hot' ? t.hotLabel : t.coldLabel})
+                    </span>
+                  )}
+                </p>
+                {line.selectedCustomizations && line.selectedCustomizations.length > 0 && (
+                  <p className="mt-0.5 text-xs text-[#4A6457]">
+                    {line.selectedCustomizations
+                      .map((s) =>
+                        lang === 'ar'
+                          ? s.optionNameAr || s.optionName || s.optionId
+                          : s.optionName || s.optionId,
+                      )
+                      .join(' · ')}
+                  </p>
+                )}
+                {line.specialInstructions && (
+                  <p className="mt-0.5 text-xs text-[#546E61]">{line.specialInstructions}</p>
+                )}
+              </li>
+            ))}
+          </ul>
+
+          <div className="rounded-xl bg-[#EAE2D0] px-4 py-3 text-xs font-bold text-[#1A3C2F]">
+            {t.requestPendingPriceNotice}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+            <a
+              href={confirmedSubmission.whatsappUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="palm-btn-gold flex min-h-[48px] items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-extrabold"
+            >
+              <MessageCircle className="h-4 w-4" />
+              <span>{t.requestSendWhatsappBtn}</span>
+            </a>
+
+            <button
+              type="button"
+              onClick={() => onGoToTracker(confirmedSubmission.request.id)}
+              className="palm-btn-forest flex min-h-[48px] items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-extrabold cursor-pointer"
+            >
+              <Clock className="h-4 w-4 text-[#C9A227]" />
+              <span>{t.requestTrackStatusBtn}</span>
+            </button>
+          </div>
+        </div>
+      ) : cart.length === 0 ? (
         <div className="palm-card mt-6 rounded-3xl p-8 sm:p-12 text-center">
           <ShoppingBag className="mx-auto h-10 w-10 text-[#C9A227]" />
           <h2 className="mt-4 text-xl font-extrabold text-[#1A3C2F]">{t.emptyCartTitle}</h2>
@@ -373,7 +552,7 @@ export function CheckoutPage({
                   {t.pickupLabel}
                 </span>
               </div>
-              <p className="mt-1.5 text-xs sm:text-sm text-[#3B594B]">{t.pickupNoticeDesc}</p>
+              <p className="mt-1.5 text-xs sm:text-sm text-[#3B594B]">{t.requestPickupNoticeDesc}</p>
             </div>
           </div>
 
@@ -610,20 +789,24 @@ export function CheckoutPage({
             </div>
           </div>
 
-          {/* Totals & Submit to Firestore + WhatsApp */}
+          {/* Estimated Totals & Submit Order Request */}
           <div className="palm-card rounded-3xl p-5 space-y-3">
             <div className="flex items-center justify-between text-sm font-semibold text-[#4A6457]">
-              <span>{t.subtotalLabel}</span>
+              <span>{t.estimatedSubtotalLabel}</span>
               <span className="font-en tabular-nums">
-                {formatPrice(subtotal)} {t.currency}
+                {formatPrice(estimatedSubtotal)} {t.currency}
               </span>
             </div>
 
-            <div className="flex items-center justify-between border-t border-[#1A3C2F]/10 pt-3 text-lg font-extrabold text-[#1A3C2F]">
-              <span>{t.totalLabel}</span>
+            <div className="flex items-center justify-between border-t border-[#1A3C2F]/10 pt-3 text-base sm:text-lg font-extrabold text-[#1A3C2F]">
+              <span>{t.estimatedCheckoutTotalLabel}</span>
               <span className="font-en tabular-nums">
-                {formatPrice(subtotal)} {t.currency}
+                {formatPrice(estimatedSubtotal)} {t.currency}
               </span>
+            </div>
+
+            <div className="rounded-xl border border-[#C9A227]/45 bg-[#FFF8E1] px-3.5 py-2.5 text-xs font-bold text-[#7A5B06]">
+              {t.estimatedPriceDisclaimer}
             </div>
 
             <div className="rounded-xl bg-[#EAE2D0] px-3.5 py-2 text-xs font-bold text-[#1A3C2F]">
@@ -654,7 +837,9 @@ export function CheckoutPage({
               className="palm-btn-gold mt-2 flex w-full min-h-[54px] items-center justify-center gap-2.5 rounded-2xl px-5 py-3.5 text-base font-extrabold cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
             >
               <MessageCircle className="h-5 w-5 stroke-[2.2]" />
-              <span>{submitting ? t.submittingOrderBtn : t.placeOrderWhatsappBtn}</span>
+              <span>
+                {submitting ? t.submittingOrderRequestBtn : t.submitOrderRequestBtn}
+              </span>
             </button>
           </div>
         </form>
